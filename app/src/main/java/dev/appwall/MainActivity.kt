@@ -2,6 +2,7 @@ package dev.appwall
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.VpnService
@@ -28,6 +29,9 @@ class MainActivity : Activity() {
     private var apps: List<AppEntry> = emptyList()
     private var updatingSwitch = false
     private var appsLoaded = false
+
+    /** PackageManager's change counter when the list was last loaded; used to spot installs/uninstalls. */
+    private var packagesSequence = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,20 +73,59 @@ class MainActivity : Activity() {
         }
         if (rules.enabled) requestNotificationPermission()
 
+        loadApps()
+        if (savedInstanceState == null) askAboutNewApp(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        askAboutNewApp(intent)
+    }
+
+    /** Opened from a "New app" notification: ask Block or Allow right away. Dismissing means allow. */
+    private fun askAboutNewApp(intent: Intent) {
+        val packageName = intent.getStringExtra(EXTRA_NEW_APP) ?: return
+        intent.removeExtra(EXTRA_NEW_APP)
+        NewAppNotifier.cancel(this, packageName)
+        val info = try {
+            packageManager.getApplicationInfo(packageName, 0)
+        } catch (e: PackageManager.NameNotFoundException) {
+            return // uninstalled again before the user got here
+        }
+        val label = info.loadLabel(packageManager)
+        AlertDialog.Builder(this)
+            .setIcon(icons[packageName])
+            .setTitle(getString(R.string.new_app_dialog_title, label))
+            .setMessage(R.string.new_app_dialog_text)
+            .setPositiveButton(R.string.block) { _, _ ->
+                rules.setBlocked(packageName, true)
+                adapter.notifyDataSetChanged()
+                onRulesChanged()
+            }
+            .setNegativeButton(R.string.allow, null)
+            .show()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Reload the list if apps were installed or removed while we were away.
+        if (appsLoaded && packageManager.getChangedPackages(packagesSequence) != null) loadApps()
+        refreshState()
+    }
+
+    private fun loadApps() {
+        val sequence = packageManager.getChangedPackages(0)?.sequenceNumber ?: 0
         Thread {
             val loaded = InstalledApps.load(this)
             runOnUiThread {
                 apps = loaded
                 adapter.setApps(loaded)
                 appsLoaded = true
+                packagesSequence = sequence
                 refreshState()
             }
         }.start()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        refreshState()
     }
 
     /** Asks the user for VPN permission the first time, then starts the firewall. */
@@ -179,8 +222,10 @@ class MainActivity : Activity() {
         renderWall()
     }
 
-    private companion object {
-        const val REQUEST_VPN = 1
-        const val REQUEST_NOTIFICATIONS = 2
+    companion object {
+        /** Package name of a just-installed app to ask about; set by the "New app" notification. */
+        const val EXTRA_NEW_APP = "dev.appwall.NEW_APP"
+        private const val REQUEST_VPN = 1
+        private const val REQUEST_NOTIFICATIONS = 2
     }
 }

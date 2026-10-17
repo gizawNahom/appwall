@@ -9,6 +9,7 @@ A simple, open-source firewall for Android that lets you cut off internet access
 - **The Wall**: every blocked app is shown as an icon at the top of the screen; tap one to unblock it, no scrolling needed
 - Background system services are hidden by default to keep the list short ("Show system apps" reveals them)
 - Master on/off switch
+- **New app alerts**: when an app that uses the internet is installed, a pop-up asks whether to block or allow it, with the buttons right in the notification or, if you tap it, in a dialog (only while the firewall is on)
 - An ongoing notification shows when the firewall is on and how many apps it is blocking
 - Rules are stored on the device; nothing is sent anywhere
 

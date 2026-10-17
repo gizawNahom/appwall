@@ -10,6 +10,13 @@
     <string name="wall_empty">No apps blocked. Tap an app below to put it on the wall.</string>
     <string name="unblock_app">Unblock %1$s</string>
     <string name="show_system_apps">Show system apps</string>
+    <string name="channel_new_apps">New apps</string>
+    <string name="new_app_title">New app: %1$s</string>
+    <string name="new_app_text">It can access the internet. Block it?</string>
+    <string name="block">Block</string>
+    <string name="allow">Allow</string>
+    <string name="new_app_dialog_title">%1$s was just installed</string>
+    <string name="new_app_dialog_text">It can access the internet. Block it?</string>
     <string name="status_on_none">On — no apps blocked yet. Tap an app to block it.</string>
     <plurals name="status_on">
         <item quantity="one">On — blocking %d app</item>

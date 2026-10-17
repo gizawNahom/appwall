@@ -4,7 +4,10 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.VpnService
@@ -21,11 +24,39 @@ class FirewallVpnService : VpnService() {
 
     private var tunnel: ParcelFileDescriptor? = null
 
+    /**
+     * Watches for newly installed apps. Android no longer delivers install events to apps that
+     * aren't running, so this only works while the firewall service is alive.
+     */
+    private val installReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return // an update, not a new app
+            val packageName = intent.data?.schemeSpecificPart ?: return
+            NewAppNotifier.onInstalled(context, packageName)
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        val filter = IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply { addDataScheme("package") }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(installReceiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(installReceiver, filter)
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            closeTunnel()
-            stopSelf()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                closeTunnel()
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_BLOCK_NEW_APP, ACTION_ALLOW_NEW_APP -> {
+                handleNewAppChoice(intent)
+                return START_STICKY
+            }
         }
         // ACTION_APPLY from the UI, or a start by the system (e.g. Always-on VPN).
         Rules(this).enabled = true
@@ -118,6 +149,16 @@ class FirewallVpnService : VpnService() {
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
     }
 
+    /** The user tapped Block or Allow on a new-app notification. */
+    private fun handleNewAppChoice(intent: Intent) {
+        val packageName = intent.data?.schemeSpecificPart ?: return
+        NewAppNotifier.cancel(this, packageName)
+        val rules = Rules(this)
+        if (intent.action == ACTION_BLOCK_NEW_APP) rules.setBlocked(packageName, true)
+        // The button may be tapped after the firewall was turned off; then just save the rule.
+        if (rules.enabled) applyRules() else stopSelf()
+    }
+
     override fun onRevoke() {
         // The user turned us off from system settings, or another VPN app took over.
         Rules(this).enabled = false
@@ -126,6 +167,7 @@ class FirewallVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        unregisterReceiver(installReceiver)
         closeTunnel()
         hideStatus()
         super.onDestroy()
@@ -139,6 +181,8 @@ class FirewallVpnService : VpnService() {
     companion object {
         const val ACTION_APPLY = "dev.appwall.APPLY"
         const val ACTION_STOP = "dev.appwall.STOP"
+        const val ACTION_BLOCK_NEW_APP = "dev.appwall.BLOCK_NEW_APP"
+        const val ACTION_ALLOW_NEW_APP = "dev.appwall.ALLOW_NEW_APP"
         private const val TAG = "AppWall"
         private const val CHANNEL_STATUS = "status"
         private const val NOTIFICATION_ID = 1
