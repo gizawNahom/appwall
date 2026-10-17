@@ -17,6 +17,17 @@
     <string name="allow">Allow</string>
     <string name="new_app_dialog_title">%1$s was just installed</string>
     <string name="new_app_dialog_text">It can access the internet. Block it?</string>
+    <string name="open_log">Log</string>
+    <string name="log_title">Blocked traffic</string>
+    <string name="log_subtitle">Connection attempts by blocked apps, last 7 days</string>
+    <string name="log_clear">Clear</string>
+    <string name="log_empty">Nothing blocked yet. When a blocked app tries to connect, it shows up here.</string>
+    <!-- Only blocked apps' traffic enters the tunnel, but for lookups Android does on an app's behalf it can't say which. -->
+    <string name="unknown_app">A blocked app</string>
+    <string name="log_dns_lookup">Looked up %1$s</string>
+    <string name="log_address_port">%1$s:%2$d · %3$s</string>
+    <string name="log_address">%1$s · %2$s</string>
+    <string name="log_attempts">×%1$d</string>
     <string name="status_on_none">On — no apps blocked yet. Tap an app to block it.</string>
     <plurals name="status_on">
         <item quantity="one">On — blocking %d app</item>

@@ -38,6 +38,10 @@ class MainActivity : Activity() {
         setContentView(R.layout.activity_main)
         rules = Rules(this)
 
+        findViewById<View>(R.id.open_log).setOnClickListener {
+            startActivity(Intent(this, LogActivity::class.java))
+        }
+
         firewallSwitch = findViewById(R.id.firewall_switch)
         status = findViewById(R.id.status)
         firewallSwitch.setOnCheckedChangeListener { _, on ->

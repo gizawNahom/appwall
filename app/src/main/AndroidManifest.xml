@@ -27,6 +27,12 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".LogActivity"
+            android:exported="false"
+            android:label="@string/log_title"
+            android:parentActivityName=".MainActivity" />
+
         <!-- Only the system holds BIND_VPN_SERVICE, so only it can bind here (needed for Always-on VPN). -->
         <service
             android:name=".FirewallVpnService"

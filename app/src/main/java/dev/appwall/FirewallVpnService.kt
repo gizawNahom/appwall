@@ -12,17 +12,17 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.VpnService
 import android.os.Build
-import android.os.ParcelFileDescriptor
 import android.util.Log
 
 /**
- * Blocks apps by routing only the blocked ones into a local tunnel that nothing ever reads
- * or forwards. Their packets go nowhere, so they get no network. All other apps stay on the
+ * Blocks apps by routing only the blocked ones into a local tunnel that is read only for logging
+ * and never forwarded. Their packets go nowhere, so they get no network. All other apps stay on the
  * normal network, untouched.
  */
 class FirewallVpnService : VpnService() {
 
-    private var tunnel: ParcelFileDescriptor? = null
+    /** Reads (and owns) the current tunnel; null while no tunnel is up. */
+    private var reader: TunnelReader? = null
 
     /**
      * Watches for newly installed apps. Android no longer delivers install events to apps that
@@ -72,6 +72,9 @@ class FirewallVpnService : VpnService() {
             .addRoute("0.0.0.0", 0)
             .addAddress("fd00:a11:a11::1", 128)
             .addRoute("::", 0)
+            // A DNS server inside the tunnel: blocked apps' lookups land in it, which lets the
+            // log show the domain names they tried to reach. Nothing ever answers.
+            .addDnsServer(DNS_SERVER)
 
         var routed = 0
         for (packageName in Rules(this).blocked()) {
@@ -99,8 +102,8 @@ class FirewallVpnService : VpnService() {
             stopSelf()
             return
         }
-        tunnel?.close()
-        tunnel = newTunnel
+        reader?.shutdown()
+        reader = TunnelReader(this, newTunnel).also { it.start() }
         showStatus(routed)
     }
 
@@ -174,11 +177,13 @@ class FirewallVpnService : VpnService() {
     }
 
     private fun closeTunnel() {
-        tunnel?.close()
-        tunnel = null
+        reader?.shutdown()
+        reader = null
     }
 
     companion object {
+        /** Fake DNS server inside the tunnel; see [applyRules]. */
+        const val DNS_SERVER = "10.111.0.2"
         const val ACTION_APPLY = "dev.appwall.APPLY"
         const val ACTION_STOP = "dev.appwall.STOP"
         const val ACTION_BLOCK_NEW_APP = "dev.appwall.BLOCK_NEW_APP"
