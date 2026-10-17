@@ -5,6 +5,7 @@
     <string name="search_hint">Search apps</string>
     <string name="loading_apps">Loading apps…</string>
     <string name="system_app">%1$s · system</string>
+    <string name="channel_status">Firewall status</string>
     <string name="status_on_none">On — no apps blocked yet. Tap an app to block it.</string>
     <plurals name="status_on">
         <item quantity="one">On — blocking %d app</item>

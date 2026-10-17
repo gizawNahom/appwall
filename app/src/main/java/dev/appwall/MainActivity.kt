@@ -1,8 +1,11 @@
 package dev.appwall
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.VpnService
+import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -44,6 +47,12 @@ class MainActivity : Activity() {
             override fun afterTextChanged(s: Editable?) = adapter.setQuery(s?.toString().orEmpty())
         })
 
+        // The service may have died (app update, killed by Android) while the firewall was on.
+        if (rules.enabled) {
+            if (VpnService.prepare(this) == null) sendToService(FirewallVpnService.ACTION_APPLY) else rules.enabled = false
+        }
+        if (rules.enabled) requestNotificationPermission()
+
         Thread {
             val apps = InstalledApps.load(this)
             runOnUiThread {
@@ -82,6 +91,22 @@ class MainActivity : Activity() {
         rules.enabled = true
         sendToService(FirewallVpnService.ACTION_APPLY)
         refreshState()
+        requestNotificationPermission()
+    }
+
+    /** Android 13+ hides our status notification unless the user allows notifications. */
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // Re-post the status so the notification appears now that it's allowed.
+        if (requestCode == REQUEST_NOTIFICATIONS && rules.enabled) sendToService(FirewallVpnService.ACTION_APPLY)
     }
 
     private fun stopFirewall() {
@@ -115,5 +140,6 @@ class MainActivity : Activity() {
 
     private companion object {
         const val REQUEST_VPN = 1
+        const val REQUEST_NOTIFICATIONS = 2
     }
 }
