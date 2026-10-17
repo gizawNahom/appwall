@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One "brick" on the wall: a blocked app. Tapping it unblocks the app. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="72dp"
+    android:layout_height="wrap_content"
+    android:background="?android:attr/selectableItemBackground"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:paddingVertical="6dp">
+
+    <ImageView
+        android:id="@+id/brick_icon"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:importantForAccessibility="no" />
+
+    <TextView
+        android:id="@+id/brick_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:gravity="center_horizontal"
+        android:maxLines="1"
+        android:paddingHorizontal="4dp"
+        android:textAppearance="@android:style/TextAppearance.Material.Caption" />
+</LinearLayout>

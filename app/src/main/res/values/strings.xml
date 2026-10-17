@@ -6,6 +6,10 @@
     <string name="loading_apps">Loading apps…</string>
     <string name="system_app">%1$s · system</string>
     <string name="channel_status">Firewall status</string>
+    <string name="wall_title">THE WALL · tap to unblock</string>
+    <string name="wall_empty">No apps blocked. Tap an app below to put it on the wall.</string>
+    <string name="unblock_app">Unblock %1$s</string>
+    <string name="show_system_apps">Show system apps</string>
     <string name="status_on_none">On — no apps blocked yet. Tap an app to block it.</string>
     <plurals name="status_on">
         <item quantity="one">On — blocking %d app</item>

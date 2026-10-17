@@ -9,7 +9,11 @@ import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.View
+import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.Switch
 import android.widget.TextView
@@ -20,6 +24,8 @@ class MainActivity : Activity() {
     private lateinit var adapter: AppListAdapter
     private lateinit var firewallSwitch: Switch
     private lateinit var status: TextView
+    private lateinit var icons: AppIcons
+    private var apps: List<AppEntry> = emptyList()
     private var updatingSwitch = false
     private var appsLoaded = false
 
@@ -35,7 +41,9 @@ class MainActivity : Activity() {
             if (on) requestStart() else stopFirewall()
         }
 
-        adapter = AppListAdapter(this, rules) { onRulesChanged() }
+        icons = AppIcons(this)
+        adapter = AppListAdapter(this, rules, icons) { onRulesChanged() }
+        adapter.setShowSystem(rules.showSystemApps)
         findViewById<ListView>(R.id.app_list).apply {
             adapter = this@MainActivity.adapter
             setOnItemClickListener { _, _, position, _ -> this@MainActivity.adapter.toggle(position) }
@@ -47,6 +55,14 @@ class MainActivity : Activity() {
             override fun afterTextChanged(s: Editable?) = adapter.setQuery(s?.toString().orEmpty())
         })
 
+        findViewById<CheckBox>(R.id.show_system).apply {
+            isChecked = rules.showSystemApps
+            setOnCheckedChangeListener { _, show ->
+                rules.showSystemApps = show
+                adapter.setShowSystem(show)
+            }
+        }
+
         // The service may have died (app update, killed by Android) while the firewall was on.
         if (rules.enabled) {
             if (VpnService.prepare(this) == null) sendToService(FirewallVpnService.ACTION_APPLY) else rules.enabled = false
@@ -54,9 +70,10 @@ class MainActivity : Activity() {
         if (rules.enabled) requestNotificationPermission()
 
         Thread {
-            val apps = InstalledApps.load(this)
+            val loaded = InstalledApps.load(this)
             runOnUiThread {
-                adapter.setApps(apps)
+                apps = loaded
+                adapter.setApps(loaded)
                 appsLoaded = true
                 refreshState()
             }
@@ -120,6 +137,29 @@ class MainActivity : Activity() {
         refreshState()
     }
 
+    /** Rebuilds the wall: one brick per blocked app, including system apps hidden from the list. */
+    private fun renderWall() {
+        val wall = findViewById<LinearLayout>(R.id.wall)
+        wall.removeAllViews()
+        val blocked = rules.blocked()
+        val blockedApps = apps.filter { it.packageName in blocked }
+        for (app in blockedApps) {
+            val brick = layoutInflater.inflate(R.layout.item_brick, wall, false)
+            brick.findViewById<ImageView>(R.id.brick_icon).setImageDrawable(icons[app.packageName])
+            brick.findViewById<TextView>(R.id.brick_label).text = app.label
+            brick.contentDescription = getString(R.string.unblock_app, app.label)
+            brick.setOnClickListener {
+                rules.setBlocked(app.packageName, false)
+                adapter.notifyDataSetChanged()
+                onRulesChanged()
+            }
+            wall.addView(brick)
+        }
+        val loadedAndEmpty = appsLoaded && blockedApps.isEmpty()
+        findViewById<View>(R.id.wall_empty).visibility = if (loadedAndEmpty) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.wall_scroll).visibility = if (blockedApps.isEmpty()) View.GONE else View.VISIBLE
+    }
+
     private fun sendToService(action: String) {
         startService(Intent(this, FirewallVpnService::class.java).setAction(action))
     }
@@ -136,6 +176,7 @@ class MainActivity : Activity() {
             count == 0 -> getString(R.string.status_on_none)
             else -> resources.getQuantityString(R.plurals.status_on, count, count)
         }
+        renderWall()
     }
 
     private companion object {

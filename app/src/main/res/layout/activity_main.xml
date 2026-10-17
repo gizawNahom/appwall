@@ -36,6 +36,39 @@
         android:paddingVertical="4dp"
         android:textAppearance="@android:style/TextAppearance.Material.Body1" />
 
+    <!-- The wall: every blocked app, always visible without scrolling the list. -->
+    <TextView
+        android:id="@+id/wall_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="8dp"
+        android:text="@string/wall_title"
+        android:textAppearance="@android:style/TextAppearance.Material.Caption" />
+
+    <TextView
+        android:id="@+id/wall_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp"
+        android:text="@string/wall_empty"
+        android:textAppearance="@android:style/TextAppearance.Material.Body1" />
+
+    <HorizontalScrollView
+        android:id="@+id/wall_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="8dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/wall"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
     <EditText
         android:id="@+id/search"
         android:layout_width="match_parent"
@@ -45,6 +78,13 @@
         android:importantForAutofill="no"
         android:inputType="text"
         android:maxLines="1" />
+
+    <CheckBox
+        android:id="@+id/show_system"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="12dp"
+        android:text="@string/show_system_apps" />
 
     <ListView
         android:id="@+id/app_list"
