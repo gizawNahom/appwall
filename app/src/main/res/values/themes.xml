@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Light and dark share every item below; they differ only in the color tokens
+        (values-night/colors.xml) and the platform parents (values-night/themes.xml).
+    -->
+    <style name="Theme.AppWall.Platform" parent="@android:style/Theme.Material.Light.NoActionBar" />
+    <style name="Theme.AppWall.DialogPlatform" parent="@android:style/Theme.Material.Light.Dialog.Alert" />
+
+    <style name="Theme.AppWall.Base" parent="Theme.AppWall.Platform">
+        <item name="android:colorBackground">@color/ground</item>
+        <item name="android:windowBackground">@color/ground</item>
+        <item name="android:colorPrimary">@color/accent</item>
+        <item name="android:colorPrimaryDark">@color/ground</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorControlNormal">@color/text_secondary</item>
+        <item name="android:colorControlHighlight">@color/line</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:textColorHint">@color/text_secondary</item>
+        <item name="android:statusBarColor">@color/ground</item>
+        <item name="android:navigationBarColor">@color/ground</item>
+        <item name="android:windowLightStatusBar">@bool/light_bars</item>
+        <item name="android:alertDialogTheme">@style/Theme.AppWall.Dialog</item>
+        <!-- Geist everywhere: the platform's own text styles name Roboto, so replace them all. -->
+        <item name="android:fontFamily">@font/geist</item>
+        <item name="android:textAppearance">@style/TextAppearance.AppWall.Body1</item>
+        <item name="android:textAppearanceSmall">@style/TextAppearance.AppWall.Body1</item>
+        <item name="android:textAppearanceMedium">@style/TextAppearance.AppWall.Subhead</item>
+        <item name="android:textAppearanceLarge">@style/TextAppearance.AppWall.Headline</item>
+        <item name="android:textAppearanceListItem">@style/TextAppearance.AppWall.Subhead</item>
+        <item name="android:textAppearanceButton">@style/TextAppearance.AppWall.Button</item>
+    </style>
+
+    <style name="Theme.AppWall" parent="Theme.AppWall.Base" />
+
+    <style name="Theme.AppWall.Dialog" parent="Theme.AppWall.DialogPlatform">
+        <item name="android:colorBackground">@color/surface</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:fontFamily">@font/geist</item>
+        <item name="android:textAppearanceButton">@style/TextAppearance.AppWall.Button</item>
+    </style>
+</resources>

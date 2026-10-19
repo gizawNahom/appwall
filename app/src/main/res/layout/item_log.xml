@@ -17,7 +17,7 @@
         android:layout_weight="1"
         android:ellipsize="middle"
         android:maxLines="1"
-        android:textAppearance="@android:style/TextAppearance.Material.Body1" />
+        android:textAppearance="@style/TextAppearance.AppWall.Body1" />
 
     <LinearLayout
         android:layout_width="wrap_content"
@@ -30,12 +30,12 @@
             android:id="@+id/log_time"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textAppearance="@android:style/TextAppearance.Material.Caption" />
+            android:textAppearance="@style/TextAppearance.AppWall.Caption" />
 
         <TextView
             android:id="@+id/log_attempts"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textAppearance="@android:style/TextAppearance.Material.Caption" />
+            android:textAppearance="@style/TextAppearance.AppWall.Caption" />
     </LinearLayout>
 </LinearLayout>

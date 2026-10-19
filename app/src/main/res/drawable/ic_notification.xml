@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AppWall mark for the status bar: a single-color wall with one brick missing. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group android:scaleX="0.3056" android:scaleY="0.3056" android:translateX="-4.5000" android:translateY="-4.5000">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M22,31h14a4,4 0 0 1 4,4v6a4,4 0 0 1 -4,4h-14a4,4 0 0 1 -4,-4v-6a4,4 0 0 1 4,-4zM47,31h14a4,4 0 0 1 4,4v6a4,4 0 0 1 -4,4h-14a4,4 0 0 1 -4,-4v-6a4,4 0 0 1 4,-4zM72,31h14a4,4 0 0 1 4,4v6a4,4 0 0 1 -4,4h-14a4,4 0 0 1 -4,-4v-6a4,4 0 0 1 4,-4zM22,63h14a4,4 0 0 1 4,4v6a4,4 0 0 1 -4,4h-14a4,4 0 0 1 -4,-4v-6a4,4 0 0 1 4,-4zM47,63h14a4,4 0 0 1 4,4v6a4,4 0 0 1 -4,4h-14a4,4 0 0 1 -4,-4v-6a4,4 0 0 1 4,-4zM72,63h14a4,4 0 0 1 4,4v6a4,4 0 0 1 -4,4h-14a4,4 0 0 1 -4,-4v-6a4,4 0 0 1 4,-4zM22,47h2a4,4 0 0 1 4,4v6a4,4 0 0 1 -4,4h-2a4,4 0 0 1 -4,-4v-6a4,4 0 0 1 4,-4zM35,47h14a4,4 0 0 1 4,4v6a4,4 0 0 1 -4,4h-14a4,4 0 0 1 -4,-4v-6a4,4 0 0 1 4,-4zM85,47h1a4,4 0 0 1 4,4v6a4,4 0 0 1 -4,4h-1a4,4 0 0 1 -4,-4v-6a4,4 0 0 1 4,-4z" />
+    </group>
+</vector>

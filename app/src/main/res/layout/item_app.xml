@@ -27,7 +27,7 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textAppearance="@android:style/TextAppearance.Material.Subhead" />
+            android:textAppearance="@style/TextAppearance.AppWall.Subhead" />
 
         <TextView
             android:id="@+id/app_package"
@@ -35,7 +35,7 @@
             android:layout_height="wrap_content"
             android:ellipsize="middle"
             android:maxLines="1"
-            android:textAppearance="@android:style/TextAppearance.Material.Caption" />
+            android:textAppearance="@style/TextAppearance.AppWall.Caption" />
     </LinearLayout>
 
     <!-- Not clickable itself: tapping anywhere on the row toggles it, via the list's item click. -->

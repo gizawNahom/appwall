@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AppWall color tokens, dark theme. Same names as values/colors.xml. -->
+<resources>
+    <color name="ground">#0A0C0D</color>
+    <color name="surface">#131618</color>
+    <color name="raised">#22272A</color>
+    <color name="text">#F3F5F5</color>
+    <color name="text_secondary">#A1A9AD</color>
+    <color name="line">#12FFFFFF</color>
+    <color name="line_strong">#2EFFFFFF</color>
+    <color name="accent">#3FB8C8</color>
+    <color name="accent_soft">#293FB8C8</color>
+    <color name="track">#14FFFFFF</color>
+    <color name="bar">#8E999D</color>
+    <color name="spark_dim">#3A4246</color>
+    <color name="blocked">#E5857A</color>
+    <color name="on_blocked">#0A0C0D</color>
+</resources>

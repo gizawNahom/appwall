@@ -17,7 +17,7 @@
             android:paddingTop="16dp"
             android:paddingBottom="8dp"
             android:text="@string/settings_title"
-            android:textAppearance="@android:style/TextAppearance.Material.Headline" />
+            android:textAppearance="@style/TextAppearance.AppWall.Headline" />
 
         <!-- Firewall -->
         <TextView
@@ -31,7 +31,7 @@
             android:minHeight="48dp"
             android:paddingHorizontal="16dp"
             android:text="@string/settings_start_on_boot"
-            android:textAppearance="@android:style/TextAppearance.Material.Subhead" />
+            android:textAppearance="@style/TextAppearance.AppWall.Subhead" />
 
         <TextView
             style="@style/SettingsNote"
@@ -70,7 +70,7 @@
                 android:layout_marginStart="8dp"
                 android:importantForAccessibility="no"
                 android:text="@string/chevron"
-                android:textAppearance="@android:style/TextAppearance.Material.Headline" />
+                android:textAppearance="@style/TextAppearance.AppWall.Headline" />
         </LinearLayout>
 
         <!-- New apps -->
@@ -120,7 +120,7 @@
             android:minHeight="48dp"
             android:paddingHorizontal="16dp"
             android:text="@string/settings_logging"
-            android:textAppearance="@android:style/TextAppearance.Material.Subhead" />
+            android:textAppearance="@style/TextAppearance.AppWall.Subhead" />
 
         <TextView
             style="@style/SettingsLabel"

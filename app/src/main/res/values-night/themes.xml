@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark: only the platform parents change; all items live in values/themes.xml. -->
+    <style name="Theme.AppWall.Platform" parent="@android:style/Theme.Material.NoActionBar" />
+    <style name="Theme.AppWall.DialogPlatform" parent="@android:style/Theme.Material.Dialog.Alert" />
+</resources>

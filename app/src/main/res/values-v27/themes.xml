@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 8.1+: navigation bar icons can be dark too, so the bar can match the ground color. -->
+    <style name="Theme.AppWall" parent="Theme.AppWall.Base">
+        <item name="android:windowLightNavigationBar">@bool/light_bars</item>
+    </style>
+</resources>

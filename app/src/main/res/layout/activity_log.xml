@@ -19,7 +19,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/log_title"
-            android:textAppearance="@android:style/TextAppearance.Material.Headline" />
+            android:textAppearance="@style/TextAppearance.AppWall.Headline" />
 
         <Button
             android:id="@+id/log_clear"
@@ -35,7 +35,7 @@
         android:paddingHorizontal="16dp"
         android:paddingVertical="4dp"
         android:id="@+id/log_subtitle"
-        android:textAppearance="@android:style/TextAppearance.Material.Caption" />
+        android:textAppearance="@style/TextAppearance.AppWall.Caption" />
 
     <TextView
         android:id="@+id/log_empty"
@@ -43,7 +43,7 @@
         android:layout_height="wrap_content"
         android:padding="16dp"
         android:text="@string/log_empty"
-        android:textAppearance="@android:style/TextAppearance.Material.Body1"
+        android:textAppearance="@style/TextAppearance.AppWall.Body1"
         android:visibility="gone" />
 
     <ExpandableListView

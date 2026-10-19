@@ -30,7 +30,7 @@
             android:gravity="center"
             android:paddingHorizontal="5dp"
             android:paddingVertical="1dp"
-            android:textColor="#FFFFFFFF"
+            android:textColor="@color/on_blocked"
             android:textSize="11sp"
             android:textStyle="bold"
             android:visibility="gone" />
@@ -45,5 +45,5 @@
         android:gravity="center_horizontal"
         android:maxLines="1"
         android:paddingHorizontal="4dp"
-        android:textAppearance="@android:style/TextAppearance.Material.Caption" />
+        android:textAppearance="@style/TextAppearance.AppWall.Caption" />
 </LinearLayout>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Android 12+ splash screen: the wall mark on the ground color. In light mode the mark keeps
+        its dark tile so the pale bricks stay visible; in dark mode tile and ground are the same.
+        (Android allows only an icon on a solid color plus a static branding image: the wordmark,
+        drawn as outlines. No live text or progress.)
+    -->
+    <style name="Theme.AppWall" parent="Theme.AppWall.Base">
+        <item name="android:windowLightNavigationBar">@bool/light_bars</item>
+        <item name="android:windowSplashScreenBackground">@color/ground</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/mark_ground</item>
+        <item name="android:windowSplashScreenBrandingImage">@drawable/splash_wordmark</item>
+    </style>
+</resources>

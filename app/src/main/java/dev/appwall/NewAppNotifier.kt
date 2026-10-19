@@ -82,7 +82,7 @@ object NewAppNotifier {
         )
         val openApp = PendingIntent.getActivity(context, 0, openIntent, PendingIntent.FLAG_IMMUTABLE)
         val builder = Notification.Builder(context, CHANNEL_NEW_APPS)
-            .setSmallIcon(R.drawable.ic_shield)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
             .setContentIntent(openApp)

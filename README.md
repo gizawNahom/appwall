@@ -15,6 +15,7 @@ A simple, open-source firewall for Android that lets you cut off internet access
 - **Settings**: start after reboot, new-app behavior, logging on/off and how long to keep the log
 - An ongoing notification shows when the firewall is on and how many apps it is blocking
 - Rules are stored on the device; nothing is sent anywhere
+- Follows your phone's light or dark setting
 
 ## How it works
 
@@ -78,3 +79,5 @@ All source files are in `app/src/main/java/dev/appwall/`.
 AppWall is free software, licensed under the [GNU General Public License v3.0 or later](LICENSE).
 
 Copyright (C) 2026 gizawNahom
+
+The bundled [Geist and Geist Mono](https://github.com/vercel/geist-font) typefaces are licensed under the SIL Open Font License 1.1 (see [third_party/Geist-OFL.txt](third_party/Geist-OFL.txt)).

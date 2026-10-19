@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Type scale: Geist for interface text, Geist Mono for numbers and identifiers. -->
+    <style name="TextAppearance.AppWall.Headline" parent="@android:style/TextAppearance.Material.Headline">
+        <item name="android:fontFamily">@font/geist</item>
+        <item name="android:textFontWeight">600</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:letterSpacing">-0.02</item>
+    </style>
+
+    <style name="TextAppearance.AppWall.Subhead" parent="@android:style/TextAppearance.Material.Subhead">
+        <item name="android:fontFamily">@font/geist</item>
+        <item name="android:textFontWeight">500</item>
+        <item name="android:textColor">@color/text</item>
+    </style>
+
+    <style name="TextAppearance.AppWall.Body1" parent="@android:style/TextAppearance.Material.Body1">
+        <item name="android:fontFamily">@font/geist</item>
+        <item name="android:textFontWeight">400</item>
+        <item name="android:textColor">@color/text</item>
+    </style>
+
+    <style name="TextAppearance.AppWall.Body2" parent="@android:style/TextAppearance.Material.Body2">
+        <item name="android:fontFamily">@font/geist</item>
+        <item name="android:textFontWeight">500</item>
+        <item name="android:textColor">@color/text</item>
+    </style>
+
+    <style name="TextAppearance.AppWall.Caption" parent="@android:style/TextAppearance.Material.Caption">
+        <item name="android:fontFamily">@font/geist</item>
+        <item name="android:textFontWeight">400</item>
+        <item name="android:textColor">@color/text_secondary</item>
+    </style>
+
+    <style name="TextAppearance.AppWall.Button" parent="@android:style/TextAppearance.Material.Button">
+        <item name="android:fontFamily">@font/geist</item>
+        <item name="android:textFontWeight">500</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+
+    <!-- Numbers, package names, addresses. -->
+    <style name="TextAppearance.AppWall.Mono" parent="@android:style/TextAppearance.Material.Body1">
+        <item name="android:fontFamily">@font/geist_mono</item>
+        <item name="android:textColor">@color/text</item>
+    </style>
+</resources>
