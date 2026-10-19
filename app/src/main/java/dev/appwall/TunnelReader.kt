@@ -59,6 +59,7 @@ class TunnelReader(context: Context, private val tunnel: ParcelFileDescriptor) :
     }
 
     private fun record(buffer: ByteArray, length: Int) {
+        if (!rules.loggingEnabled) return
         val packet = PacketParser.parse(buffer, length) ?: return
         // IPv6 housekeeping (router solicitations etc.) comes from the system, not from an app.
         if (packet.protocol == PacketParser.ICMPV6) return

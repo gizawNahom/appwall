@@ -8,6 +8,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.VpnService
@@ -32,12 +34,13 @@ class FirewallVpnService : VpnService() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return // an update, not a new app
             val packageName = intent.data?.schemeSpecificPart ?: return
-            NewAppNotifier.onInstalled(context, packageName)
+            if (NewAppNotifier.onInstalled(context, packageName)) applyRules()
         }
     }
 
     override fun onCreate() {
         super.onCreate()
+        running = this
         val filter = IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply { addDataScheme("package") }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(installReceiver, filter, RECEIVER_NOT_EXPORTED)
@@ -96,9 +99,11 @@ class FirewallVpnService : VpnService() {
 
         val newTunnel = builder.establish()
         if (newTunnel == null) {
-            // VPN permission was revoked or never granted.
+            // VPN permission was revoked or never granted. If we were started at boot with
+            // startForegroundService(), Android insists we go foreground first, even to quit.
             Rules(this).enabled = false
             closeTunnel()
+            showStatus(0)
             stopSelf()
             return
         }
@@ -152,12 +157,13 @@ class FirewallVpnService : VpnService() {
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
     }
 
-    /** The user tapped Block or Allow on a new-app notification. */
+    /** The user tapped Block, Allow or Unblock on a new-app notification. */
     private fun handleNewAppChoice(intent: Intent) {
         val packageName = intent.data?.schemeSpecificPart ?: return
         NewAppNotifier.cancel(this, packageName)
         val rules = Rules(this)
-        if (intent.action == ACTION_BLOCK_NEW_APP) rules.setBlocked(packageName, true)
+        // Allow also unblocks: it's the Unblock button when new apps are blocked automatically.
+        rules.setBlocked(packageName, intent.action == ACTION_BLOCK_NEW_APP)
         // The button may be tapped after the firewall was turned off; then just save the rule.
         if (rules.enabled) applyRules() else stopSelf()
     }
@@ -170,6 +176,7 @@ class FirewallVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        running = null
         unregisterReceiver(installReceiver)
         closeTunnel()
         hideStatus()
@@ -181,7 +188,32 @@ class FirewallVpnService : VpnService() {
         reader = null
     }
 
+    /** Live Always-on state, as only the running VPN service can ask Android for it. */
+    data class AlwaysOnStatus(val alwaysOn: Boolean, val blocksWithoutVpn: Boolean)
+
     companion object {
+        @Volatile private var running: FirewallVpnService? = null
+
+        /**
+         * True when some other app's VPN is up. Android allows one VPN at a time, so AppWall
+         * can't run then. Any VPN seen while our own service isn't running can't be ours.
+         */
+        fun anotherVpnActive(context: Context): Boolean {
+            if (running != null) return false
+            val connectivity = context.getSystemService(ConnectivityManager::class.java)
+            @Suppress("DEPRECATION") // allNetworks: still the simplest way to list current networks
+            return connectivity.allNetworks.any {
+                connectivity.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+            }
+        }
+
+        /** Null when it can't be known: the firewall isn't running, or Android is older than 10. */
+        fun alwaysOnStatus(): AlwaysOnStatus? {
+            val service = running ?: return null
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+            return AlwaysOnStatus(service.isAlwaysOn, service.isLockdownEnabled)
+        }
+
         /** Fake DNS server inside the tunnel; see [applyRules]. */
         const val DNS_SERVER = "10.111.0.2"
         const val ACTION_APPLY = "dev.appwall.APPLY"

@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
@@ -41,6 +42,7 @@ class MainActivity : Activity() {
     }
     private var updatingSwitch = false
     private var appsLoaded = false
+    private var consentRequestedAt = 0L
 
     /** PackageManager's change counter when the list was last loaded; used to spot installs/uninstalls. */
     private var packagesSequence = 0
@@ -52,6 +54,9 @@ class MainActivity : Activity() {
 
         findViewById<View>(R.id.open_log).setOnClickListener {
             startActivity(Intent(this, LogActivity::class.java))
+        }
+        findViewById<View>(R.id.open_settings).setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
         }
 
         firewallSwitch = findViewById(R.id.firewall_switch)
@@ -152,8 +157,14 @@ class MainActivity : Activity() {
 
     /** Asks the user for VPN permission the first time, then starts the firewall. */
     private fun requestStart() {
+        if (FirewallVpnService.anotherVpnActive(this)) {
+            showOtherVpnDialog()
+            refreshState() // flips the switch back off
+            return
+        }
         val consent = VpnService.prepare(this)
         if (consent != null) {
+            consentRequestedAt = SystemClock.elapsedRealtime()
             @Suppress("DEPRECATION")
             startActivityForResult(consent, REQUEST_VPN)
         } else {
@@ -166,7 +177,26 @@ class MainActivity : Activity() {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_VPN) return
-        if (resultCode == RESULT_OK) startFirewall() else refreshState()
+        if (resultCode == RESULT_OK) {
+            startFirewall()
+            return
+        }
+        // While another app holds Always-on, Android closes the consent dialog before anyone
+        // could tap it, and offers no API to ask who holds it. A refusal that fast means that.
+        if (SystemClock.elapsedRealtime() - consentRequestedAt < INSTANT_REFUSAL_MS) showOtherVpnDialog()
+        refreshState()
+    }
+
+    /** Explains that Android allows one VPN at a time and another app has it. */
+    private fun showOtherVpnDialog() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.other_vpn_title)
+            .setMessage(R.string.other_vpn_message)
+            .setPositiveButton(R.string.always_on_guide_open) { _, _ ->
+                startActivity(Intent(android.provider.Settings.ACTION_VPN_SETTINGS))
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun startFirewall() {
@@ -254,6 +284,7 @@ class MainActivity : Activity() {
         val count = rules.blocked().size
         status.text = when {
             !appsLoaded -> getString(R.string.loading_apps)
+            !rules.enabled && FirewallVpnService.anotherVpnActive(this) -> getString(R.string.status_other_vpn)
             !rules.enabled -> resources.getQuantityString(R.plurals.status_off, count, count)
             count == 0 -> getString(R.string.status_on_none)
             else -> resources.getQuantityString(R.plurals.status_on, count, count)
@@ -267,5 +298,6 @@ class MainActivity : Activity() {
         private const val REQUEST_VPN = 1
         private const val REQUEST_NOTIFICATIONS = 2
         private const val WALL_REFRESH_MS = 5000L
+        private const val INSTANT_REFUSAL_MS = 700L
     }
 }

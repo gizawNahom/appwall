@@ -10,7 +10,9 @@ A simple, open-source firewall for Android that lets you cut off internet access
 - Background system services are hidden by default to keep the list short ("Show system apps" reveals them)
 - Master on/off switch
 - **Blocked traffic log**: grouped by app, showing which domains or addresses each blocked app tried to reach, when, and how often (kept on the device for 7 days)
-- **New app alerts**: when an app that uses the internet is installed, a pop-up asks whether to block or allow it, with the buttons right in the notification or, if you tap it, in a dialog (only while the firewall is on)
+- **New app alerts**: when an app that uses the internet is installed, AppWall asks whether to block or allow it (or, if you prefer, allows or blocks new apps automatically). Only while the firewall is on.
+- **Starts by itself** after a reboot or an AppWall update, if it was on before; optional guided setup for Android's Always-on VPN
+- **Settings**: start after reboot, new-app behavior, logging on/off and how long to keep the log
 - An ongoing notification shows when the firewall is on and how many apps it is blocking
 - Rules are stored on the device; nothing is sent anywhere
 
@@ -25,7 +27,7 @@ For the blocked traffic log, AppWall reads (but never forwards) what blocked app
 ## Limitations
 
 - **Android only.** iOS doesn't allow an app to block other apps' network access.
-- **Only one VPN at a time.** Android allows a single active VPN, so AppWall can't run alongside a regular VPN app.
+- **Only one VPN at a time.** Android allows a single active VPN (and a single Always-on VPN), so AppWall can't run alongside a regular VPN app or another firewall such as NetGuard. AppWall tells you when that's the problem.
 - **Don't enable "Block connections without VPN"** for AppWall in system settings. It may cut off internet for all apps.
 - **The VPN key icon may not appear** in the status bar on some phones (e.g. Samsung). Use AppWall's own notification to see whether the firewall is on.
 
@@ -65,6 +67,9 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | `PacketParser.kt` | Extracts addresses, ports and DNS names from raw IP packets |
 | `BlockLog.kt` | On-device database of blocked connection attempts |
 | `LogActivity.kt` | The blocked traffic screen |
+| `SettingsActivity.kt` | The settings screen |
+| `NewAppNotifier.kt` | Asks about, allows or blocks newly installed apps |
+| `StartupReceiver.kt` | Turns the firewall back on after a reboot or an app update |
 
 All source files are in `app/src/main/java/dev/appwall/`.
 

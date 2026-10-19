@@ -25,9 +25,12 @@ data class AppSummary(
 
 /**
  * On-device log of blocked connection attempts. Apps retry a lot, so repeats of the same attempt
- * within a minute are folded into one row with an attempt count. Entries expire after a week.
+ * within a minute are folded into one row with an attempt count. Entries expire after the
+ * user's chosen retention period (7 days by default).
  */
 class BlockLog private constructor(context: Context) : SQLiteOpenHelper(context, "blocklog.db", null, 1) {
+
+    private val rules = Rules(context)
 
     /** Recently written rows by attempt key, so retries bump a row instead of adding new ones. */
     private val recent = HashMap<String, Pair<Long, Long>>() // key -> (row id, last attempt time)
@@ -71,14 +74,14 @@ class BlockLog private constructor(context: Context) : SQLiteOpenHelper(context,
 
         if (++insertsSincePrune >= 100) {
             insertsSincePrune = 0
-            db.delete("log", "time < ?", arrayOf((now - MAX_AGE_MS).toString()))
+            db.delete("log", "time < ?", arrayOf((now - retentionMs()).toString()))
             recent.entries.removeAll { now - it.value.second >= MERGE_WINDOW_MS }
         }
     }
 
     @Synchronized
     fun entries(limit: Int = 500): List<LogEntry> {
-        val since = System.currentTimeMillis() - MAX_AGE_MS
+        val since = System.currentTimeMillis() - retentionMs()
         readableDatabase.query(
             "log", arrayOf("time", "package", "protocol", "address", "port", "host", "attempts"),
             "time >= ?", arrayOf(since.toString()), null, null, "time DESC", limit.toString(),
@@ -102,7 +105,7 @@ class BlockLog private constructor(context: Context) : SQLiteOpenHelper(context,
     /** One row per app, most recently active first. */
     @Synchronized
     fun summaries(): List<AppSummary> {
-        val since = System.currentTimeMillis() - MAX_AGE_MS
+        val since = System.currentTimeMillis() - retentionMs()
         readableDatabase.rawQuery(
             "SELECT package, SUM(attempts), COUNT(DISTINCT COALESCE(host, address || ':' || port)), MAX(time) " +
                 "FROM log WHERE time >= ? GROUP BY package ORDER BY MAX(time) DESC",
@@ -129,6 +132,14 @@ class BlockLog private constructor(context: Context) : SQLiteOpenHelper(context,
         }
     }
 
+    /** Deletes entries older than the retention period, e.g. right after it was shortened. */
+    @Synchronized
+    fun prune() {
+        writableDatabase.delete("log", "time < ?", arrayOf((System.currentTimeMillis() - retentionMs()).toString()))
+    }
+
+    private fun retentionMs() = rules.logRetentionDays * DAY_MS
+
     @Synchronized
     fun clear() {
         writableDatabase.delete("log", null, null)
@@ -137,7 +148,7 @@ class BlockLog private constructor(context: Context) : SQLiteOpenHelper(context,
 
     companion object {
         private const val MERGE_WINDOW_MS = 60_000L
-        private const val MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000L
+        private const val DAY_MS = 24 * 60 * 60 * 1000L
 
         @Volatile private var instance: BlockLog? = null
 

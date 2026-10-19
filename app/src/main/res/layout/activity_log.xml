@@ -34,7 +34,7 @@
         android:layout_height="wrap_content"
         android:paddingHorizontal="16dp"
         android:paddingVertical="4dp"
-        android:text="@string/log_subtitle"
+        android:id="@+id/log_subtitle"
         android:textAppearance="@android:style/TextAppearance.Material.Caption" />
 
     <TextView

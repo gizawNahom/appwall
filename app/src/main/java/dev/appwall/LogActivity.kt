@@ -62,6 +62,12 @@ class LogActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        val rules = Rules(this)
+        findViewById<TextView>(R.id.log_subtitle).text = if (rules.loggingEnabled) {
+            resources.getQuantityString(R.plurals.log_subtitle, rules.logRetentionDays, rules.logRetentionDays)
+        } else {
+            getString(R.string.log_subtitle_off)
+        }
         handler.post(refresher)
     }
 
