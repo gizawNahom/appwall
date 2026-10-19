@@ -38,9 +38,35 @@
         <item name="android:textAllCaps">false</item>
     </style>
 
+    <!-- Screen title next to the mark. -->
+    <style name="TextAppearance.AppWall.Title" parent="TextAppearance.AppWall.Subhead">
+        <item name="android:textSize">17sp</item>
+        <item name="android:textFontWeight">600</item>
+        <item name="android:letterSpacing">-0.02</item>
+    </style>
+
+    <!-- The big statement on a card, e.g. "5 apps blocked". -->
+    <style name="TextAppearance.AppWall.Display" parent="TextAppearance.AppWall.Headline">
+        <item name="android:textSize">32sp</item>
+        <item name="android:letterSpacing">-0.03</item>
+    </style>
+
+    <!-- Small uppercase column labels: "APP", "TODAY". -->
+    <style name="TextAppearance.AppWall.Label" parent="TextAppearance.AppWall.Caption">
+        <item name="android:fontFamily">@font/geist_mono</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:letterSpacing">0.09</item>
+    </style>
+
     <!-- Numbers, package names, addresses. -->
     <style name="TextAppearance.AppWall.Mono" parent="@android:style/TextAppearance.Material.Body1">
         <item name="android:fontFamily">@font/geist_mono</item>
+        <item name="android:textSize">15sp</item>
         <item name="android:textColor">@color/text</item>
+    </style>
+
+    <style name="TextAppearance.AppWall.Mono.Small" parent="TextAppearance.AppWall.Mono">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/text_secondary</item>
     </style>
 </resources>

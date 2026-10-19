@@ -12,12 +12,14 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.text.Editable
+import android.text.SpannableString
+import android.text.Spanned
 import android.text.TextWatcher
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.Switch
 import android.widget.TextView
@@ -26,18 +28,21 @@ import java.util.Calendar
 class MainActivity : Activity() {
 
     private lateinit var rules: Rules
+    private lateinit var log: BlockLog
     private lateinit var adapter: AppListAdapter
     private lateinit var firewallSwitch: Switch
-    private lateinit var status: TextView
     private lateinit var icons: AppIcons
-    private var apps: List<AppEntry> = emptyList()
+    private lateinit var search: EditText
+    private var tabBeforeSearch = AppListAdapter.Tab.BLOCKED
+    private var undo: (() -> Unit)? = null
+    private val hideUndo = Runnable { findViewById<View>(R.id.undo_bar).visibility = View.GONE }
 
-    /** Keeps the wall's "attempts today" badges current while the screen is visible. */
+    /** Keeps the card's numbers and the list's counts current while the screen is visible. */
     private val handler = Handler(Looper.getMainLooper())
-    private val wallRefresher = object : Runnable {
+    private val statsRefresher = object : Runnable {
         override fun run() {
-            renderWall()
-            handler.postDelayed(this, WALL_REFRESH_MS)
+            refreshStats()
+            handler.postDelayed(this, STATS_REFRESH_MS)
         }
     }
     private var updatingSwitch = false
@@ -51,33 +56,51 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         rules = Rules(this)
+        log = BlockLog.get(this)
+        icons = AppIcons(this)
 
-        findViewById<View>(R.id.open_log).setOnClickListener {
-            startActivity(Intent(this, LogActivity::class.java))
-        }
         findViewById<View>(R.id.open_settings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
+        findViewById<View>(R.id.open_search).setOnClickListener { enterSearch() }
+        findViewById<View>(R.id.search_back).setOnClickListener { exitSearch() }
+        findViewById<View>(R.id.search_clear).setOnClickListener { search.setText("") }
+        findViewById<View>(R.id.undo_button).setOnClickListener {
+            undo?.invoke()
+            undo = null
+            hideUndo.run()
+        }
+        findViewById<View>(R.id.last_attempt_cell).setOnClickListener {
+            startActivity(Intent(this, LogActivity::class.java))
+        }
 
         firewallSwitch = findViewById(R.id.firewall_switch)
-        status = findViewById(R.id.status)
         firewallSwitch.setOnCheckedChangeListener { _, on ->
             if (updatingSwitch) return@setOnCheckedChangeListener
             if (on) requestStart() else stopFirewall()
         }
 
-        icons = AppIcons(this)
-        adapter = AppListAdapter(this, rules, icons) { onRulesChanged() }
+        adapter = AppListAdapter(this, rules, icons) { app -> toggleBlocked(app) }
         adapter.setShowSystem(rules.showSystemApps)
         findViewById<ListView>(R.id.app_list).apply {
             adapter = this@MainActivity.adapter
-            setOnItemClickListener { _, _, position, _ -> this@MainActivity.adapter.toggle(position) }
+            setOnItemClickListener { _, _, position, _ -> onAppTapped(this@MainActivity.adapter.getItem(position)) }
         }
 
-        findViewById<EditText>(R.id.search).addTextChangedListener(object : TextWatcher {
+        findViewById<View>(R.id.tab_blocked).setOnClickListener { selectTab(AppListAdapter.Tab.BLOCKED) }
+        findViewById<View>(R.id.tab_allowed).setOnClickListener { selectTab(AppListAdapter.Tab.ALLOWED) }
+        // Until the dedicated picker exists, "Block an app" means: search for it.
+        findViewById<View>(R.id.block_app).setOnClickListener { enterSearch() }
+
+        search = findViewById(R.id.search)
+        search.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) = adapter.setQuery(s?.toString().orEmpty())
+            override fun afterTextChanged(s: Editable?) {
+                adapter.setQuery(s?.toString().orEmpty())
+                findViewById<View>(R.id.search_clear).visibility = if (s.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
+                updateEmptyState()
+            }
         })
 
         findViewById<CheckBox>(R.id.show_system).apply {
@@ -85,8 +108,10 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener { _, show ->
                 rules.showSystemApps = show
                 adapter.setShowSystem(show)
+                refreshState()
             }
         }
+        selectTab(AppListAdapter.Tab.BLOCKED)
 
         // The service may have died (app update, killed by Android) while the firewall was on.
         if (rules.enabled) {
@@ -121,7 +146,6 @@ class MainActivity : Activity() {
             .setMessage(R.string.new_app_dialog_text)
             .setPositiveButton(R.string.block) { _, _ ->
                 rules.setBlocked(packageName, true)
-                adapter.notifyDataSetChanged()
                 onRulesChanged()
             }
             .setNegativeButton(R.string.allow, null)
@@ -133,11 +157,11 @@ class MainActivity : Activity() {
         // Reload the list if apps were installed or removed while we were away.
         if (appsLoaded && packageManager.getChangedPackages(packagesSequence) != null) loadApps()
         refreshState()
-        handler.postDelayed(wallRefresher, WALL_REFRESH_MS)
+        handler.post(statsRefresher)
     }
 
     override fun onPause() {
-        handler.removeCallbacks(wallRefresher)
+        handler.removeCallbacks(statsRefresher)
         super.onPause()
     }
 
@@ -146,10 +170,10 @@ class MainActivity : Activity() {
         Thread {
             val loaded = InstalledApps.load(this)
             runOnUiThread {
-                apps = loaded
                 adapter.setApps(loaded)
-                appsLoaded = true
                 packagesSequence = sequence
+                if (!appsLoaded) revealList()
+                appsLoaded = true
                 refreshState()
             }
         }.start()
@@ -229,40 +253,126 @@ class MainActivity : Activity() {
 
     private fun onRulesChanged() {
         if (rules.enabled) sendToService(FirewallVpnService.ACTION_APPLY)
+        adapter.refresh()
         refreshState()
     }
 
-    /** Rebuilds the wall: one brick per blocked app, including system apps hidden from the list. */
-    private fun renderWall() {
-        val wall = findViewById<LinearLayout>(R.id.wall)
-        wall.removeAllViews()
-        val blocked = rules.blocked()
-        val blockedApps = apps.filter { it.packageName in blocked }
-        val attemptsToday = BlockLog.get(this).attemptsSince(startOfToday())
-        for (app in blockedApps) {
-            val brick = layoutInflater.inflate(R.layout.item_brick, wall, false)
-            brick.findViewById<ImageView>(R.id.brick_icon).setImageDrawable(icons[app.packageName])
-            brick.findViewById<TextView>(R.id.brick_label).text = app.label
-            val attempts = attemptsToday[app.packageName] ?: 0
-            brick.findViewById<TextView>(R.id.brick_badge).apply {
-                text = if (attempts > 999) getString(R.string.badge_overflow) else attempts.toString()
-                visibility = if (attempts > 0) View.VISIBLE else View.GONE
-            }
-            brick.contentDescription = resources.getQuantityString(R.plurals.brick_description, attempts, app.label, attempts)
-            brick.setOnClickListener {
-                rules.setBlocked(app.packageName, false)
-                adapter.notifyDataSetChanged()
-                onRulesChanged()
-            }
-            brick.setOnLongClickListener {
-                startActivity(Intent(this, LogActivity::class.java).putExtra(LogActivity.EXTRA_PACKAGE, app.packageName))
-                true
-            }
-            wall.addView(brick)
+    /** A row's Block/Allow button: flip the rule, with a few seconds to undo it. */
+    private fun toggleBlocked(app: AppEntry) {
+        val nowBlocked = !rules.isBlocked(app.packageName)
+        rules.setBlocked(app.packageName, nowBlocked)
+        onRulesChanged()
+        showUndo(getString(if (nowBlocked) R.string.undo_blocked else R.string.undo_allowed, app.label)) {
+            rules.setBlocked(app.packageName, !nowBlocked)
+            onRulesChanged()
         }
-        val loadedAndEmpty = appsLoaded && blockedApps.isEmpty()
-        findViewById<View>(R.id.wall_empty).visibility = if (loadedAndEmpty) View.VISIBLE else View.GONE
-        findViewById<View>(R.id.wall_scroll).visibility = if (blockedApps.isEmpty()) View.GONE else View.VISIBLE
+    }
+
+    private fun showUndo(message: String, action: () -> Unit) {
+        undo = action
+        findViewById<TextView>(R.id.undo_message).text = message
+        findViewById<View>(R.id.undo_bar).visibility = View.VISIBLE
+        handler.removeCallbacks(hideUndo)
+        handler.postDelayed(hideUndo, UNDO_MS)
+    }
+
+    /** Tapping a row shows what's known about the app; changing its rule is an explicit choice there. */
+    private fun onAppTapped(app: AppEntry) {
+        val blocked = rules.isBlocked(app.packageName)
+        val attempts = log.attemptsSince(startOfToday())[app.packageName] ?: 0
+        val dialog = AlertDialog.Builder(this)
+            .setIcon(icons[app.packageName])
+            .setTitle(app.label)
+            .setNegativeButton(android.R.string.cancel, null)
+        if (blocked) {
+            dialog.setMessage(resources.getQuantityString(R.plurals.blocked_app_message, attempts, attempts))
+                .setPositiveButton(getString(R.string.allow_app, app.label)) { _, _ -> toggleBlocked(app) }
+                .setNeutralButton(R.string.view_log) { _, _ ->
+                    startActivity(Intent(this, LogActivity::class.java).putExtra(LogActivity.EXTRA_PACKAGE, app.packageName))
+                }
+        } else {
+            dialog.setMessage(R.string.allowed_app_message)
+                .setPositiveButton(getString(R.string.block_app_named, app.label)) { _, _ -> toggleBlocked(app) }
+        }
+        dialog.show()
+    }
+
+    private fun selectTab(tab: AppListAdapter.Tab) {
+        adapter.tab = tab
+        val blocked = tab == AppListAdapter.Tab.BLOCKED
+        findViewById<View>(R.id.tab_blocked).isSelected = blocked
+        findViewById<View>(R.id.tab_allowed).isSelected = !blocked
+        findViewById<View>(R.id.column_today).visibility = if (blocked) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.show_system).visibility = if (blocked) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.block_app).visibility = if (blocked) View.VISIBLE else View.GONE
+        findViewById<ListView>(R.id.app_list).setSelection(0)
+        if (tab != AppListAdapter.Tab.SEARCH) tabBeforeSearch = tab
+        refreshTabs()
+        updateEmptyState()
+    }
+
+    /**
+     * Search covers every app, so the card and tabs step aside and one results list takes over.
+     * The back arrow, or the phone's back gesture, returns to the tab you were on.
+     */
+    private fun enterSearch() {
+        if (adapter.tab == AppListAdapter.Tab.SEARCH) return
+        setSearchMode(true)
+        adapter.tab = AppListAdapter.Tab.SEARCH
+        updateEmptyState()
+        search.requestFocus()
+        getSystemService(InputMethodManager::class.java).showSoftInput(search, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    private fun exitSearch() {
+        getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(search.windowToken, 0)
+        search.setText("")
+        search.clearFocus()
+        setSearchMode(false)
+        selectTab(tabBeforeSearch)
+    }
+
+    private fun setSearchMode(searching: Boolean) {
+        val normal = if (searching) View.GONE else View.VISIBLE
+        for (id in listOf(R.id.header, R.id.status_card, R.id.tabs, R.id.columns, R.id.block_app)) {
+            findViewById<View>(id).visibility = normal
+        }
+        findViewById<View>(R.id.search_bar).visibility = if (searching) View.VISIBLE else View.GONE
+        if (!searching && adapter.tab != AppListAdapter.Tab.BLOCKED) findViewById<View>(R.id.block_app).visibility = View.GONE
+    }
+
+    @Deprecated("Platform back handling; still delivered when no back callback is registered")
+    override fun onBackPressed() {
+        if (adapter.tab == AppListAdapter.Tab.SEARCH) exitSearch() else {
+            @Suppress("DEPRECATION")
+            super.onBackPressed()
+        }
+    }
+
+    /** Swaps the loading placeholders for the real list. */
+    private fun revealList() {
+        findViewById<View>(R.id.loading_bar).animate().alpha(0f).withEndAction {
+            findViewById<View>(R.id.loading_bar).visibility = View.GONE
+        }
+        findViewById<View>(R.id.skeleton).animate().alpha(0f).withEndAction {
+            findViewById<View>(R.id.skeleton).visibility = View.GONE
+        }
+        findViewById<View>(R.id.app_list).animate().alpha(1f)
+    }
+
+    private fun updateEmptyState() {
+        val empty = findViewById<TextView>(R.id.list_empty)
+        val show = appsLoaded && adapter.count == 0
+        empty.visibility = if (show) View.VISIBLE else View.GONE
+        if (!show) return
+        empty.setText(
+            when {
+                adapter.tab == AppListAdapter.Tab.SEARCH && search.text.isBlank() -> R.string.search_prompt
+                adapter.tab == AppListAdapter.Tab.SEARCH -> R.string.empty_search
+                adapter.tab == AppListAdapter.Tab.BLOCKED -> R.string.empty_blocked
+                else -> R.string.empty_allowed
+            }
+        )
     }
 
     private fun startOfToday(): Long = Calendar.getInstance().apply {
@@ -276,20 +386,84 @@ class MainActivity : Activity() {
         startService(Intent(this, FirewallVpnService::class.java).setAction(action))
     }
 
+    /** "91 attempts stopped today", with the number in Geist Mono and the main text color. */
+    private fun withMonoNumber(text: String, number: String): CharSequence {
+        val start = text.indexOf(number)
+        if (start < 0) return text
+        return SpannableString(text).apply {
+            setSpan(FontSpan(resources.getFont(R.font.geist_mono)), start, start + number.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            setSpan(android.text.style.ForegroundColorSpan(getColor(R.color.text)), start, start + number.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+    }
+
     private fun refreshState() {
         updatingSwitch = true
         firewallSwitch.isChecked = rules.enabled
         updatingSwitch = false
 
-        val count = rules.blocked().size
-        status.text = when {
-            !appsLoaded -> getString(R.string.loading_apps)
-            !rules.enabled && FirewallVpnService.anotherVpnActive(this) -> getString(R.string.status_other_vpn)
-            !rules.enabled -> resources.getQuantityString(R.plurals.status_off, count, count)
-            count == 0 -> getString(R.string.status_on_none)
-            else -> resources.getQuantityString(R.plurals.status_on, count, count)
+        val on = rules.enabled
+        val blockedCount = if (appsLoaded) adapter.blockedCount() else rules.blocked().size
+        findViewById<ImageView>(R.id.status_dot).setImageLevel(if (on) 1 else 0)
+        findViewById<TextView>(R.id.wall_state).setText(if (on) R.string.wall_up else R.string.wall_down)
+        findViewById<TextView>(R.id.headline).text = when {
+            !on -> getString(R.string.headline_down)
+            blockedCount == 0 -> getString(R.string.headline_none)
+            else -> resources.getQuantityString(R.plurals.headline_blocked, blockedCount, blockedCount)
         }
-        renderWall()
+        refreshTabs()
+        refreshStats()
+    }
+
+    /** The parts that change as attempts come in: today's total, the sparkline, last attempt, counts. */
+    private fun refreshStats() {
+        val today = log.attemptsSince(startOfToday())
+        adapter.setAttemptsToday(today)
+        val total = today.values.sum()
+        val blockedCount = if (appsLoaded) adapter.blockedCount() else rules.blocked().size
+
+        findViewById<TextView>(R.id.attempts_today).text = when {
+            rules.enabled -> withMonoNumber(resources.getQuantityString(R.plurals.attempts_today, total, total), total.toString())
+            FirewallVpnService.anotherVpnActive(this) -> getString(R.string.status_other_vpn_short)
+            else -> resources.getQuantityString(R.plurals.turn_on_to_block, blockedCount, blockedCount)
+        }
+        val now = System.currentTimeMillis()
+        findViewById<SparklineView>(R.id.sparkline).apply {
+            values = log.attemptsPerBucket(now - DAY_MS, DAY_MS / SPARK_BARS, SPARK_BARS)
+            contentDescription = getString(R.string.sparkline_description)
+        }
+        findViewById<TextView>(R.id.last_attempt).text = shortAgo(log.lastAttemptTime(), now)
+        findViewById<TextView>(R.id.allowed_count).text = if (appsLoaded) adapter.allowedCount().toString() else "—"
+        updateEmptyState()
+    }
+
+    private fun refreshTabs() {
+        val blocked = if (appsLoaded) adapter.blockedCount() else rules.blocked().size
+        val allowed = adapter.allowedCount()
+        findViewById<TextView>(R.id.tab_blocked).text = tabLabel(R.string.tab_blocked, blocked)
+        findViewById<TextView>(R.id.tab_allowed).text = tabLabel(R.string.tab_allowed, if (appsLoaded) allowed else null)
+    }
+
+    /** "Blocked 5", with the count in Geist Mono, secondary color. */
+    private fun tabLabel(label: Int, count: Int?): CharSequence {
+        val name = getString(label)
+        if (count == null) return name
+        val text = "$name  $count"
+        return SpannableString(text).apply {
+            setSpan(FontSpan(resources.getFont(R.font.geist_mono)), name.length + 2, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            setSpan(android.text.style.ForegroundColorSpan(getColor(R.color.text_secondary)), name.length + 2, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+    }
+
+    /** "now", "2m", "3h", "4d"; "—" when nothing has been blocked yet. */
+    private fun shortAgo(time: Long?, now: Long): String {
+        if (time == null) return "—"
+        val minutes = (now - time) / 60_000
+        return when {
+            minutes < 1 -> getString(R.string.ago_now)
+            minutes < 60 -> getString(R.string.ago_minutes, minutes)
+            minutes < 24 * 60 -> getString(R.string.ago_hours, minutes / 60)
+            else -> getString(R.string.ago_days, minutes / (24 * 60))
+        }
     }
 
     companion object {
@@ -297,7 +471,10 @@ class MainActivity : Activity() {
         const val EXTRA_NEW_APP = "dev.appwall.NEW_APP"
         private const val REQUEST_VPN = 1
         private const val REQUEST_NOTIFICATIONS = 2
-        private const val WALL_REFRESH_MS = 5000L
+        private const val STATS_REFRESH_MS = 5000L
+        private const val UNDO_MS = 5000L
+        private const val DAY_MS = 24 * 60 * 60 * 1000L
+        private const val SPARK_BARS = 12 // two-hour bars over the last day
         private const val INSTANT_REFUSAL_MS = 700L
     }
 }

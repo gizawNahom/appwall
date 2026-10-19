@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Wall up" indicator: an accent dot with a soft halo. Level 1 = up, level 0 = down (grey, no halo). -->
+<level-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:maxLevel="0">
+        <layer-list>
+            <item android:width="8dp" android:height="8dp" android:gravity="center">
+                <shape android:shape="oval"><solid android:color="@color/text_secondary" /></shape>
+            </item>
+        </layer-list>
+    </item>
+    <item android:maxLevel="1">
+        <layer-list>
+            <item android:width="16dp" android:height="16dp" android:gravity="center">
+                <shape android:shape="oval"><solid android:color="@color/accent_soft" /></shape>
+            </item>
+            <item android:width="8dp" android:height="8dp" android:gravity="center">
+                <shape android:shape="oval"><solid android:color="@color/accent" /></shape>
+            </item>
+        </layer-list>
+    </item>
+</level-list>

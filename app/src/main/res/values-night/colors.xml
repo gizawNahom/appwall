@@ -15,4 +15,5 @@
     <color name="spark_dim">#3A4246</color>
     <color name="blocked">#E5857A</color>
     <color name="on_blocked">#0A0C0D</color>
+    <color name="mark_ring">#24FFFFFF</color>
 </resources>

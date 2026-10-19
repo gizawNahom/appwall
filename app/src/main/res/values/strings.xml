@@ -3,15 +3,61 @@
     <string name="app_name">AppWall</string>
     <string name="firewall_switch">Firewall on/off</string>
     <string name="search_hint">Search apps</string>
-    <string name="loading_apps">Loading apps…</string>
-    <string name="system_app">%1$s · system</string>
     <string name="channel_status">Firewall status</string>
-    <string name="wall_empty">No apps blocked. Tap an app below to put it on the wall.</string>
-    <string name="badge_overflow">999+</string>
-    <plurals name="brick_description">
-        <item quantity="one">%1$s, %2$d attempt blocked today. Tap to unblock, hold to see its log.</item>
-        <item quantity="other">%1$s, %2$d attempts blocked today. Tap to unblock, hold to see its log.</item>
+    <!-- Home -->
+    <string name="wall_up">Wall up</string>
+    <string name="wall_down">Off</string>
+    <string name="headline_down">Wall is down</string>
+    <string name="headline_none">No apps blocked</string>
+    <plurals name="headline_blocked">
+        <item quantity="one">%d app blocked</item>
+        <item quantity="other">%d apps blocked</item>
     </plurals>
+    <plurals name="attempts_today">
+        <item quantity="one">%d attempt stopped today</item>
+        <item quantity="other">%d attempts stopped today</item>
+    </plurals>
+    <plurals name="turn_on_to_block">
+        <item quantity="one">Turn it on to block %d app</item>
+        <item quantity="other">Turn it on to block %d apps</item>
+    </plurals>
+    <string name="status_other_vpn_short">Another VPN app is active, so AppWall can\'t run</string>
+    <string name="sparkline_description">Blocked attempts in two-hour steps over the last day, newest on the right</string>
+    <string name="stat_allowed">Allowed</string>
+    <string name="stat_last_attempt">Last attempt</string>
+    <string name="ago_now">now</string>
+    <string name="ago_minutes">%dm</string>
+    <string name="ago_hours">%dh</string>
+    <string name="ago_days">%dd</string>
+    <string name="tab_blocked">Blocked</string>
+    <string name="tab_allowed">Allowed</string>
+    <string name="column_app">APP</string>
+    <string name="column_today">TODAY</string>
+    <string name="block_an_app">Block an app</string>
+    <string name="undo">Undo</string>
+    <string name="undo_blocked">%1$s blocked</string>
+    <string name="undo_allowed">%1$s allowed</string>
+    <string name="block_app_named">Block %1$s</string>
+    <string name="allowed_app_message">Allowed. It can use the internet.</string>
+    <string name="state_blocked">BLOCKED</string>
+    <string name="search_all_hint">Search all apps</string>
+    <string name="search_close">Close search</string>
+    <string name="search_clear">Clear search</string>
+    <string name="search_prompt">Type an app\'s name or package to find it, blocked or not.</string>
+    <string name="allow_app">Allow %1$s</string>
+    <string name="view_log">View log</string>
+    <plurals name="blocked_app_message">
+        <item quantity="one">Blocked. It tried to connect %d time today.</item>
+        <item quantity="other">Blocked. It tried to connect %d times today.</item>
+    </plurals>
+    <plurals name="row_blocked_description">
+        <item quantity="one">%1$s, blocked, %2$d attempt today. Tap for details.</item>
+        <item quantity="other">%1$s, blocked, %2$d attempts today. Tap for details.</item>
+    </plurals>
+    <string name="row_allowed_description">%1$s, allowed. Tap for details.</string>
+    <string name="empty_blocked">Nothing is behind the wall yet. Tap \"Block an app\" to add one.</string>
+    <string name="empty_allowed">Every app is blocked.</string>
+    <string name="empty_search">No apps match your search.</string>
     <string name="show_system_apps">Show system apps</string>
     <string name="channel_new_apps">New apps</string>
     <string name="new_app_title">New app: %1$s</string>
@@ -66,7 +112,6 @@
     <string name="license_url" translatable="false">https://www.gnu.org/licenses/gpl-3.0.html</string>
     <string name="new_app_dialog_title">%1$s was just installed</string>
     <string name="new_app_dialog_text">It can access the internet. Block it?</string>
-    <string name="open_log">Log</string>
     <string name="log_title">Blocked traffic</string>
     <plurals name="log_subtitle">
         <item quantity="one">Connection attempts by blocked apps, last %d day</item>
@@ -90,15 +135,9 @@
         <item quantity="one">%d destination</item>
         <item quantity="other">%d destinations</item>
     </plurals>
-    <string name="wall_title">THE WALL · tap to unblock · hold for log</string>
-    <string name="status_other_vpn">Off — another VPN app is active, so AppWall can\'t run</string>
     <string name="status_on_none">On — no apps blocked yet. Tap an app to block it.</string>
     <plurals name="status_on">
         <item quantity="one">On — blocking %d app</item>
         <item quantity="other">On — blocking %d apps</item>
-    </plurals>
-    <plurals name="status_off">
-        <item quantity="one">Off — %d app will be blocked when on</item>
-        <item quantity="other">Off — %d apps will be blocked when on</item>
     </plurals>
 </resources>

@@ -23,4 +23,5 @@
     <color name="mark_ground">#0A0C0D</color>
     <color name="mark_brick">#E8ECEC</color>
     <color name="mark_brick_dim">#B4BDC0</color>
+    <color name="mark_ring">#00000000</color>  <!-- hairline around the tile; only needed on dark grounds -->
 </resources>

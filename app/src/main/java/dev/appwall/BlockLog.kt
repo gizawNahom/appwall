@@ -132,6 +132,32 @@ class BlockLog private constructor(context: Context) : SQLiteOpenHelper(context,
         }
     }
 
+    /**
+     * Attempts in [buckets] consecutive windows of [bucketMs] starting at [since], oldest first
+     * (for sparklines). A merged row counts in the window of its latest attempt.
+     */
+    @Synchronized
+    fun attemptsPerBucket(since: Long, bucketMs: Long, buckets: Int): IntArray {
+        val result = IntArray(buckets)
+        readableDatabase.rawQuery(
+            "SELECT (time - ?) / ?, SUM(attempts) FROM log WHERE time >= ? GROUP BY 1",
+            arrayOf(since.toString(), bucketMs.toString(), since.toString()),
+        ).use { c ->
+            while (c.moveToNext()) {
+                val bucket = c.getInt(0)
+                if (bucket in 0 until buckets) result[bucket] = c.getInt(1)
+            }
+        }
+        return result
+    }
+
+    /** When the most recent blocked attempt happened, or null if the log is empty. */
+    @Synchronized
+    fun lastAttemptTime(): Long? =
+        readableDatabase.rawQuery("SELECT MAX(time) FROM log", null).use { c ->
+            if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
+        }
+
     /** Deletes entries older than the retention period, e.g. right after it was shortened. */
     @Synchronized
     fun prune() {
