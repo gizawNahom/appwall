@@ -6,9 +6,12 @@
     <string name="loading_apps">Loading apps…</string>
     <string name="system_app">%1$s · system</string>
     <string name="channel_status">Firewall status</string>
-    <string name="wall_title">THE WALL · tap to unblock</string>
     <string name="wall_empty">No apps blocked. Tap an app below to put it on the wall.</string>
-    <string name="unblock_app">Unblock %1$s</string>
+    <string name="badge_overflow">999+</string>
+    <plurals name="brick_description">
+        <item quantity="one">%1$s, %2$d attempt blocked today. Tap to unblock, hold to see its log.</item>
+        <item quantity="other">%1$s, %2$d attempts blocked today. Tap to unblock, hold to see its log.</item>
+    </plurals>
     <string name="show_system_apps">Show system apps</string>
     <string name="channel_new_apps">New apps</string>
     <string name="new_app_title">New app: %1$s</string>
@@ -28,6 +31,16 @@
     <string name="log_address_port">%1$s:%2$d · %3$s</string>
     <string name="log_address">%1$s · %2$s</string>
     <string name="log_attempts">×%1$d</string>
+    <string name="log_app_summary">%1$s · %2$s</string>
+    <plurals name="log_attempt_count">
+        <item quantity="one">%d attempt</item>
+        <item quantity="other">%d attempts</item>
+    </plurals>
+    <plurals name="log_destination_count">
+        <item quantity="one">%d destination</item>
+        <item quantity="other">%d destinations</item>
+    </plurals>
+    <string name="wall_title">THE WALL · tap to unblock · hold for log</string>
     <string name="status_on_none">On — no apps blocked yet. Tap an app to block it.</string>
     <plurals name="status_on">
         <item quantity="one">On — blocking %d app</item>

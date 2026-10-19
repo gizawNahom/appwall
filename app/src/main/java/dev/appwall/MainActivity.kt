@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
@@ -18,6 +20,7 @@ import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.Switch
 import android.widget.TextView
+import java.util.Calendar
 
 class MainActivity : Activity() {
 
@@ -27,6 +30,15 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var icons: AppIcons
     private var apps: List<AppEntry> = emptyList()
+
+    /** Keeps the wall's "attempts today" badges current while the screen is visible. */
+    private val handler = Handler(Looper.getMainLooper())
+    private val wallRefresher = object : Runnable {
+        override fun run() {
+            renderWall()
+            handler.postDelayed(this, WALL_REFRESH_MS)
+        }
+    }
     private var updatingSwitch = false
     private var appsLoaded = false
 
@@ -116,6 +128,12 @@ class MainActivity : Activity() {
         // Reload the list if apps were installed or removed while we were away.
         if (appsLoaded && packageManager.getChangedPackages(packagesSequence) != null) loadApps()
         refreshState()
+        handler.postDelayed(wallRefresher, WALL_REFRESH_MS)
+    }
+
+    override fun onPause() {
+        handler.removeCallbacks(wallRefresher)
+        super.onPause()
     }
 
     private fun loadApps() {
@@ -190,15 +208,25 @@ class MainActivity : Activity() {
         wall.removeAllViews()
         val blocked = rules.blocked()
         val blockedApps = apps.filter { it.packageName in blocked }
+        val attemptsToday = BlockLog.get(this).attemptsSince(startOfToday())
         for (app in blockedApps) {
             val brick = layoutInflater.inflate(R.layout.item_brick, wall, false)
             brick.findViewById<ImageView>(R.id.brick_icon).setImageDrawable(icons[app.packageName])
             brick.findViewById<TextView>(R.id.brick_label).text = app.label
-            brick.contentDescription = getString(R.string.unblock_app, app.label)
+            val attempts = attemptsToday[app.packageName] ?: 0
+            brick.findViewById<TextView>(R.id.brick_badge).apply {
+                text = if (attempts > 999) getString(R.string.badge_overflow) else attempts.toString()
+                visibility = if (attempts > 0) View.VISIBLE else View.GONE
+            }
+            brick.contentDescription = resources.getQuantityString(R.plurals.brick_description, attempts, app.label, attempts)
             brick.setOnClickListener {
                 rules.setBlocked(app.packageName, false)
                 adapter.notifyDataSetChanged()
                 onRulesChanged()
+            }
+            brick.setOnLongClickListener {
+                startActivity(Intent(this, LogActivity::class.java).putExtra(LogActivity.EXTRA_PACKAGE, app.packageName))
+                true
             }
             wall.addView(brick)
         }
@@ -206,6 +234,13 @@ class MainActivity : Activity() {
         findViewById<View>(R.id.wall_empty).visibility = if (loadedAndEmpty) View.VISIBLE else View.GONE
         findViewById<View>(R.id.wall_scroll).visibility = if (blockedApps.isEmpty()) View.GONE else View.VISIBLE
     }
+
+    private fun startOfToday(): Long = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 
     private fun sendToService(action: String) {
         startService(Intent(this, FirewallVpnService::class.java).setAction(action))
@@ -231,5 +266,6 @@ class MainActivity : Activity() {
         const val EXTRA_NEW_APP = "dev.appwall.NEW_APP"
         private const val REQUEST_VPN = 1
         private const val REQUEST_NOTIFICATIONS = 2
+        private const val WALL_REFRESH_MS = 5000L
     }
 }

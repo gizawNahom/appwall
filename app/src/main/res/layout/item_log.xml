@@ -1,46 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- One attempt under an expanded app in the grouped log; indented to sit under the app's name. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:gravity="center_vertical"
-    android:minHeight="64dp"
+    android:minHeight="40dp"
     android:orientation="horizontal"
-    android:paddingHorizontal="16dp"
-    android:paddingVertical="8dp">
+    android:paddingStart="72dp"
+    android:paddingEnd="16dp"
+    android:paddingVertical="4dp">
 
-    <ImageView
-        android:id="@+id/log_icon"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:importantForAccessibility="no" />
-
-    <LinearLayout
+    <TextView
+        android:id="@+id/log_target"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
         android:layout_weight="1"
-        android:orientation="vertical">
-
-        <TextView
-            android:id="@+id/log_app"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textAppearance="@android:style/TextAppearance.Material.Subhead" />
-
-        <TextView
-            android:id="@+id/log_target"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="middle"
-            android:maxLines="1"
-            android:textAppearance="@android:style/TextAppearance.Material.Body1" />
-    </LinearLayout>
+        android:ellipsize="middle"
+        android:maxLines="1"
+        android:textAppearance="@android:style/TextAppearance.Material.Body1" />
 
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
         android:gravity="end"
         android:orientation="vertical">
 

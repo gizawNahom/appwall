@@ -15,6 +15,14 @@ data class LogEntry(
     val attempts: Int,
 )
 
+/** Per-app totals for the grouped log view. */
+data class AppSummary(
+    val packageName: String?,
+    val attempts: Int,
+    val destinations: Int,
+    val lastTime: Long,
+)
+
 /**
  * On-device log of blocked connection attempts. Apps retry a lot, so repeats of the same attempt
  * within a minute are folded into one row with an attempt count. Entries expire after a week.
@@ -87,6 +95,36 @@ class BlockLog private constructor(context: Context) : SQLiteOpenHelper(context,
                     attempts = c.getInt(6),
                 )
             }
+            return result
+        }
+    }
+
+    /** One row per app, most recently active first. */
+    @Synchronized
+    fun summaries(): List<AppSummary> {
+        val since = System.currentTimeMillis() - MAX_AGE_MS
+        readableDatabase.rawQuery(
+            "SELECT package, SUM(attempts), COUNT(DISTINCT COALESCE(host, address || ':' || port)), MAX(time) " +
+                "FROM log WHERE time >= ? GROUP BY package ORDER BY MAX(time) DESC",
+            arrayOf(since.toString()),
+        ).use { c ->
+            val result = ArrayList<AppSummary>(c.count)
+            while (c.moveToNext()) {
+                result += AppSummary(c.getString(0), c.getInt(1), c.getInt(2), c.getLong(3))
+            }
+            return result
+        }
+    }
+
+    /** Total attempts per app since [time]; apps with none are absent. */
+    @Synchronized
+    fun attemptsSince(time: Long): Map<String?, Int> {
+        readableDatabase.rawQuery(
+            "SELECT package, SUM(attempts) FROM log WHERE time >= ? GROUP BY package",
+            arrayOf(time.toString()),
+        ).use { c ->
+            val result = HashMap<String?, Int>()
+            while (c.moveToNext()) result[c.getString(0)] = c.getInt(1)
             return result
         }
     }
