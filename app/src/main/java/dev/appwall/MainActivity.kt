@@ -89,8 +89,10 @@ class MainActivity : Activity() {
 
         findViewById<View>(R.id.tab_blocked).setOnClickListener { selectTab(AppListAdapter.Tab.BLOCKED) }
         findViewById<View>(R.id.tab_allowed).setOnClickListener { selectTab(AppListAdapter.Tab.ALLOWED) }
-        // Until the dedicated picker exists, "Block an app" means: search for it.
-        findViewById<View>(R.id.block_app).setOnClickListener { enterSearch() }
+        findViewById<View>(R.id.block_app).setOnClickListener {
+            @Suppress("DEPRECATION")
+            startActivityForResult(Intent(this, PickerActivity::class.java), REQUEST_PICK)
+        }
 
         search = findViewById(R.id.search)
         search.addTextChangedListener(object : TextWatcher {
@@ -200,6 +202,10 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_PICK) {
+            if (resultCode == RESULT_OK) blockPicked(data?.getStringArrayExtra(PickerActivity.EXTRA_PACKAGES)?.toList().orEmpty())
+            return
+        }
         if (requestCode != REQUEST_VPN) return
         if (resultCode == RESULT_OK) {
             startFirewall()
@@ -264,6 +270,24 @@ class MainActivity : Activity() {
         onRulesChanged()
         showUndo(getString(if (nowBlocked) R.string.undo_blocked else R.string.undo_allowed, app.label)) {
             rules.setBlocked(app.packageName, !nowBlocked)
+            onRulesChanged()
+        }
+    }
+
+    /** Apps chosen in the picker: block them all, with one Undo for the lot. */
+    private fun blockPicked(packages: List<String>) {
+        if (packages.isEmpty()) return
+        packages.forEach { rules.setBlocked(it, true) }
+        onRulesChanged()
+        selectTab(AppListAdapter.Tab.BLOCKED)
+        val message = if (packages.size == 1) {
+            val label = adapter.labelOf(packages[0]) ?: packages[0]
+            getString(R.string.undo_blocked, label)
+        } else {
+            resources.getQuantityString(R.plurals.undo_blocked_n, packages.size, packages.size)
+        }
+        showUndo(message) {
+            packages.forEach { rules.setBlocked(it, false) }
             onRulesChanged()
         }
     }
@@ -471,6 +495,7 @@ class MainActivity : Activity() {
         const val EXTRA_NEW_APP = "dev.appwall.NEW_APP"
         private const val REQUEST_VPN = 1
         private const val REQUEST_NOTIFICATIONS = 2
+        private const val REQUEST_PICK = 3
         private const val STATS_REFRESH_MS = 5000L
         private const val UNDO_MS = 5000L
         private const val DAY_MS = 24 * 60 * 60 * 1000L

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Picker checkbox: an outlined square, filled with the accent and a check mark when chosen. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_checked="true">
+        <layer-list>
+            <item android:width="22dp" android:height="22dp" android:gravity="center">
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/accent" />
+                    <corners android:radius="6dp" />
+                </shape>
+            </item>
+            <item android:width="14dp" android:height="14dp" android:gravity="center" android:drawable="@drawable/ic_check" />
+        </layer-list>
+    </item>
+    <item>
+        <layer-list>
+            <item android:width="22dp" android:height="22dp" android:gravity="center">
+                <shape android:shape="rectangle">
+                    <stroke android:width="1.5dp" android:color="@color/line_strong" />
+                    <corners android:radius="6dp" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+</selector>

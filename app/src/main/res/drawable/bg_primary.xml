@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Primary action: solid in the text color (the strongest contrast); muted while disabled. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_enabled="false">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/raised" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+    <item>
+        <ripple android:color="@color/line_strong">
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/text" />
+                    <corners android:radius="12dp" />
+                </shape>
+            </item>
+        </ripple>
+    </item>
+</selector>

@@ -35,6 +35,27 @@
     <string name="column_today">TODAY</string>
     <string name="block_an_app">Block an app</string>
     <string name="undo">Undo</string>
+    <plurals name="undo_blocked_n">
+        <item quantity="one">%d app blocked</item>
+        <item quantity="other">%d apps blocked</item>
+    </plurals>
+
+    <!-- Block-an-app picker -->
+    <string name="close">Close</string>
+    <string name="picker_search_hint">Search by name or package</string>
+    <string name="picker_allowed_total">%d allowed</string>
+    <string name="filter_apps">Apps</string>
+    <string name="filter_system">System</string>
+    <string name="filter_recent">Recent</string>
+    <string name="picker_select">Select apps to block</string>
+    <plurals name="picker_block_n">
+        <item quantity="one">Block %d app</item>
+        <item quantity="other">Block %d apps</item>
+    </plurals>
+    <string name="picker_row">%1$s. Tap to select.</string>
+    <string name="picker_row_selected">%1$s, selected. Tap to unselect.</string>
+    <string name="picker_empty">No allowed apps here.</string>
+    <string name="picker_empty_recent">You haven\'t installed any apps in the last 7 days.</string>
     <string name="undo_blocked">%1$s blocked</string>
     <string name="undo_allowed">%1$s allowed</string>
     <string name="block_app_named">Block %1$s</string>

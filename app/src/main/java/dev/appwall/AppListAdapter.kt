@@ -59,6 +59,8 @@ class AppListAdapter(
         refilter()
     }
 
+    fun labelOf(packageName: String): String? = allApps.firstOrNull { it.packageName == packageName }?.label
+
     /** Re-reads the block rules, e.g. after an app was blocked or allowed. */
     fun refresh() = refilter()
 
