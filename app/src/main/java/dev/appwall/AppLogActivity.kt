@@ -26,7 +26,6 @@ import java.util.Calendar
  */
 class AppLogActivity : Activity() {
 
-    private lateinit var log: SqlBlockLog
     private lateinit var rules: Rules
     /** Null for traffic AppWall couldn't attribute to an app. */
     private var packageName: String? = null
@@ -45,7 +44,6 @@ class AppLogActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_app_log)
-        log = appWall.log
         rules = Rules(this)
         packageName = intent.getStringExtra(EXTRA_PACKAGE)
         showTimeline = savedInstanceState?.getBoolean(STATE_TIMELINE) ?: false
@@ -112,10 +110,18 @@ class AppLogActivity : Activity() {
     }
 
     private fun reload() {
+        val pkg = packageName
+        val withTimeline = showTimeline
+        onDb({ log -> log.destinations(pkg) to (if (withTimeline) log.entriesFor(pkg) else null) }) { (places, entries) ->
+            show(places, entries)
+        }
+    }
+
+    private fun show(places: List<Destination>, entries: List<LogEntry>?) {
         val days = rules.logRetentionDays
-        destinations.items = log.destinations(packageName)
+        destinations.items = places
         destinations.max = destinations.items.maxOfOrNull { it.attempts } ?: 1
-        if (showTimeline) timeline.setEntries(log.entriesFor(packageName))
+        if (entries != null) timeline.setEntries(entries)
         (if (showTimeline) timeline else destinations).notifyDataSetChanged()
 
         findViewById<TextView>(R.id.tab_destinations).text =

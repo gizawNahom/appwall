@@ -68,7 +68,7 @@ class SettingsActivity : Activity() {
         segments.forEach { (id, days) ->
             findViewById<View>(id).setOnClickListener {
                 rules.logRetentionDays = days
-                log.prune()
+                appWall.db.execute { log.prune() }
                 showRetention()
             }
         }
@@ -79,8 +79,7 @@ class SettingsActivity : Activity() {
                 .setTitle(R.string.log_clear_title)
                 .setMessage(R.string.log_clear_text)
                 .setPositiveButton(R.string.log_clear) { _, _ ->
-                    log.clear()
-                    Toast.makeText(this, R.string.settings_log_cleared, Toast.LENGTH_SHORT).show()
+                    onDb({ it.clear() }) { Toast.makeText(this, R.string.settings_log_cleared, Toast.LENGTH_SHORT).show() }
                 }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()

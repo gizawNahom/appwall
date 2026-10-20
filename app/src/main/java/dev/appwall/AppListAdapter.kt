@@ -22,7 +22,6 @@ class AppListAdapter(
     private val context: Context,
     private val rules: Rules,
     private val icons: AppIcons,
-    private val log: SqlBlockLog,
     private val onAction: (AppEntry, Action) -> Unit,
 ) : BaseAdapter() {
 
@@ -38,6 +37,26 @@ class AppListAdapter(
         expanded = if (expanded == app.packageName) null else app.packageName
         notifyDataSetChanged()
     }
+
+    /** The open row's app, if any: its [details] should be loaded. */
+    val expandedPackage: String? get() = expanded
+
+    /** What the open row shows, loaded off the UI thread with [loadDetails]. */
+    var details: Details? = null
+        set(value) {
+            field = value
+            notifyDataSetChanged()
+        }
+
+    /** The open row's recent activity. */
+    class Details(
+        val packageName: String,
+        val lastAttempt: Long?,
+        val week: Int,
+        val hourly: IntArray,
+        val topDestinations: List<String>,
+        val destinationCount: Int,
+    )
 
     var tab = Tab.BLOCKED
         set(value) {
@@ -149,7 +168,9 @@ class AppListAdapter(
     /** Fills the expanded section: recent activity for blocked apps, and the actions that fit. */
     private fun bindDetails(view: View, app: AppEntry, blocked: Boolean) {
         val now = System.currentTimeMillis()
-        val lastAttempt = log.lastAttemptTime(app.packageName)
+        // Until this row's details arrive, show its actions only.
+        val details = details?.takeIf { it.packageName == app.packageName }
+        val lastAttempt = details?.lastAttempt
         val summary = view.findViewById<TextView>(R.id.details_summary)
         val chart = view.findViewById<SparklineView>(R.id.details_chart)
         val caption = view.findViewById<View>(R.id.details_chart_caption)
@@ -157,8 +178,14 @@ class AppListAdapter(
         val primary = view.findViewById<Button>(R.id.details_primary)
         val fullLog = view.findViewById<Button>(R.id.details_log)
 
-        if (blocked) {
-            val week = log.attemptsSince(now - WEEK_MS)[app.packageName] ?: 0
+        if (blocked && details == null) {
+            summary.text = ""
+            chart.visibility = View.GONE
+            caption.visibility = View.GONE
+            destinations.visibility = View.GONE
+            bindButton(primary, app, R.string.allow, Action.ALLOW)
+        } else if (blocked && details != null) {
+            val week = details.week
             summary.text = if (lastAttempt == null) {
                 context.getString(R.string.details_no_attempts)
             } else {
@@ -168,12 +195,13 @@ class AppListAdapter(
                     context.resources.getQuantityString(R.plurals.details_week, week, week),
                 )
             }
-            val hourly = log.attemptsPerBucket(now - DAY_MS, HOUR_MS, 24, app.packageName)
+            val hourly = details.hourly
             chart.values = hourly
             chart.contentDescription = context.getString(R.string.details_chart_description, hourly.sum())
             chart.visibility = if (lastAttempt != null) View.VISIBLE else View.GONE
             caption.visibility = chart.visibility
-            val (top, total) = log.topDestinations(app.packageName, now - WEEK_MS, 3)
+            val top = details.topDestinations
+            val total = details.destinationCount
             destinations.visibility = if (top.isEmpty()) View.GONE else View.VISIBLE
             destinations.text = buildString {
                 append(top.joinToString(" · "))
@@ -197,9 +225,22 @@ class AppListAdapter(
         button.setOnClickListener { onAction(app, action) }
     }
 
-    private companion object {
-        const val HOUR_MS = 60 * 60 * 1000L
-        const val DAY_MS = 24 * HOUR_MS
-        const val WEEK_MS = 7 * DAY_MS
+    companion object {
+        private const val HOUR_MS = 60 * 60 * 1000L
+        private const val DAY_MS = 24 * HOUR_MS
+        private const val WEEK_MS = 7 * DAY_MS
+
+        /** Runs the open row's queries; call it on the database thread. */
+        fun loadDetails(log: SqlBlockLog, packageName: String, now: Long): Details {
+            val (top, total) = log.topDestinations(packageName, now - WEEK_MS, 3)
+            return Details(
+                packageName = packageName,
+                lastAttempt = log.lastAttemptTime(packageName),
+                week = log.attemptsSince(now - WEEK_MS)[packageName] ?: 0,
+                hourly = log.attemptsPerBucket(now - DAY_MS, HOUR_MS, 24, packageName),
+                topDestinations = top,
+                destinationCount = total,
+            )
+        }
     }
 }

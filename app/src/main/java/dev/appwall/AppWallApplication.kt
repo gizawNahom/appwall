@@ -1,11 +1,13 @@
 package dev.appwall
 
+import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import dev.appwall.core.state.ChangeSignal
 import dev.appwall.core.state.FirewallStatusBoard
 import dev.appwall.core.state.Scheduler
@@ -18,6 +20,13 @@ import java.util.concurrent.Executors
  * process start, boot included: nothing here touches the disk until first used.
  */
 class AppWallApplication : Application() {
+
+    /**
+     * The one thread for blocklog.db work from screens: queries, prune and clear, so the UI thread
+     * never waits on the disk. (The tunnel still writes on its own thread until step 8b.)
+     */
+    lateinit var db: ExecutorService
+        private set
 
     /** The blocked traffic log. Opening the database waits for the first query. */
     lateinit var log: SqlBlockLog
@@ -33,6 +42,7 @@ class AppWallApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        db = namedExecutor("appwall-db")
         val rules = Rules(this)
         log = SqlBlockLog(AndroidSqlDb(this, SqlBlockLog.FILE, SqlBlockLog.VERSION, SqlBlockLog::create), { rules.logRetentionDays })
         apps = InstalledAppsRepository(this, namedExecutor("appwall-apps"))
@@ -53,6 +63,23 @@ class AppWallApplication : Application() {
     }
 
     private fun namedExecutor(name: String): ExecutorService = Executors.newSingleThreadExecutor { Thread(it, name) }
+}
+
+/**
+ * Runs [work] with the block log on the database thread, then hands its result to [show] on the
+ * UI thread, unless this screen has gone by then. A failing query is logged and skipped.
+ */
+fun <T> Activity.onDb(work: (SqlBlockLog) -> T, show: (T) -> Unit) {
+    val app = appWall
+    app.db.execute {
+        val result = try {
+            work(app.log)
+        } catch (e: Exception) {
+            Log.w("AppWall", "Block log query failed", e)
+            return@execute
+        }
+        runOnUiThread { if (!isDestroyed) show(result) }
+    }
 }
 
 /** Delivers on Android's main (UI) thread. */

@@ -32,7 +32,6 @@ import java.util.Calendar
 class MainActivity : Activity() {
 
     private lateinit var rules: Rules
-    private lateinit var log: SqlBlockLog
     private lateinit var adapter: AppListAdapter
     private lateinit var firewallSwitch: Switch
     private lateinit var icons: AppIcons
@@ -61,7 +60,6 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         rules = Rules(this)
-        log = appWall.log
         icons = AppIcons(this)
 
         findViewById<View>(R.id.open_settings).setOnClickListener {
@@ -85,7 +83,7 @@ class MainActivity : Activity() {
             if (on) requestStart() else stopFirewall()
         }
 
-        adapter = AppListAdapter(this, rules, icons, log) { app, action -> onRowAction(app, action) }
+        adapter = AppListAdapter(this, rules, icons) { app, action -> onRowAction(app, action) }
         adapter.setShowSystem(rules.showSystemApps)
         findViewById<ListView>(R.id.app_list).apply {
             adapter = this@MainActivity.adapter
@@ -324,7 +322,10 @@ class MainActivity : Activity() {
     }
 
     /** Tapping a row opens it in place to show what's known about the app; tapping again closes it. */
-    private fun onAppTapped(app: AppEntry) = adapter.toggleExpanded(app)
+    private fun onAppTapped(app: AppEntry) {
+        adapter.toggleExpanded(app)
+        if (adapter.expandedPackage != null) refreshStats() // loads the open row's details
+    }
 
     private fun selectTab(tab: AppListAdapter.Tab) {
         adapter.tab = tab
@@ -446,8 +447,31 @@ class MainActivity : Activity() {
 
     /** The parts that change as attempts come in: today's total, the sparkline, last attempt, counts. */
     private fun refreshStats() {
-        val today = log.attemptsSince(startOfToday())
+        val now = System.currentTimeMillis()
+        val startOfToday = startOfToday()
+        val expanded = adapter.expandedPackage
+        onDb({ log ->
+            HomeStats(
+                today = log.attemptsSince(startOfToday),
+                sparkline = log.attemptsPerBucket(now - DAY_MS, DAY_MS / SPARK_BARS, SPARK_BARS),
+                lastAttempt = log.lastAttemptTime(),
+                details = expanded?.let { AppListAdapter.loadDetails(log, it, now) },
+            )
+        }) { stats -> showStats(stats, now) }
+    }
+
+    /** The log numbers Home shows, read together on the database thread. */
+    private class HomeStats(
+        val today: Map<String?, Int>,
+        val sparkline: IntArray,
+        val lastAttempt: Long?,
+        val details: AppListAdapter.Details?,
+    )
+
+    private fun showStats(stats: HomeStats, now: Long) {
+        val today = stats.today
         adapter.setAttemptsToday(today)
+        adapter.details = stats.details
         val total = today.values.sum()
         val blockedCount = if (appsLoaded) adapter.blockedCount() else rules.blocked().size
 
@@ -460,12 +484,11 @@ class MainActivity : Activity() {
             firewall.reason == OffReason.NO_PERMISSION -> getString(R.string.status_off_no_permission)
             else -> resources.getQuantityString(R.plurals.turn_on_to_block, blockedCount, blockedCount)
         }
-        val now = System.currentTimeMillis()
         findViewById<SparklineView>(R.id.sparkline).apply {
-            values = log.attemptsPerBucket(now - DAY_MS, DAY_MS / SPARK_BARS, SPARK_BARS)
+            values = stats.sparkline
             contentDescription = getString(R.string.sparkline_description)
         }
-        findViewById<TextView>(R.id.last_attempt).text = TimeText.shortAgo(this, log.lastAttemptTime(), now)
+        findViewById<TextView>(R.id.last_attempt).text = TimeText.shortAgo(this, stats.lastAttempt, now)
         findViewById<TextView>(R.id.allowed_count).text = if (appsLoaded) adapter.allowedCount().toString() else "—"
         updateEmptyState()
     }

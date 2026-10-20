@@ -22,7 +22,6 @@ import java.util.Calendar
  */
 class LogActivity : Activity() {
 
-    private lateinit var log: SqlBlockLog
     private lateinit var rules: Rules
     private lateinit var icons: AppIcons
     private val adapter = AppsAdapter()
@@ -38,7 +37,6 @@ class LogActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_log)
-        log = appWall.log
         rules = Rules(this)
         icons = AppIcons(this)
 
@@ -69,18 +67,25 @@ class LogActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle(R.string.log_clear_title)
             .setMessage(R.string.log_clear_text)
-            .setPositiveButton(R.string.log_clear) { _, _ ->
-                log.clear()
-                reload()
-            }
+            .setPositiveButton(R.string.log_clear) { _, _ -> onDb({ it.clear() }) { reload() } }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
     private fun reload() {
-        val days = rules.logRetentionDays
         val now = System.currentTimeMillis()
-        adapter.apps = log.summaries()
+        val startOfToday = startOfToday()
+        onDb({ log ->
+            LogStats(log.summaries(), log.attemptsSince(startOfToday).values.sum(), log.attemptsPerBucket(now - DAY_MS, HOUR_MS, 24))
+        }, ::show)
+    }
+
+    /** The numbers the log screen shows, read together on the database thread. */
+    private class LogStats(val apps: List<AppSummary>, val today: Int, val hourly: IntArray)
+
+    private fun show(stats: LogStats) {
+        val days = rules.logRetentionDays
+        adapter.apps = stats.apps
         adapter.notifyDataSetChanged()
 
         val hasEntries = adapter.apps.isNotEmpty()
@@ -101,13 +106,13 @@ class LogActivity : Activity() {
             return
         }
 
-        findViewById<TextView>(R.id.log_today).text = log.attemptsSince(startOfToday()).values.sum().toString()
+        findViewById<TextView>(R.id.log_today).text = stats.today.toString()
         findViewById<TextView>(R.id.log_period).text = adapter.apps.sumOf { it.attempts }.toString()
         findViewById<TextView>(R.id.log_period_label).text = resources.getQuantityString(R.plurals.log_stat_period, days, days)
         findViewById<TextView>(R.id.log_apps).text = adapter.apps.size.toString()
         findViewById<TextView>(R.id.log_column_app).text = resources.getQuantityString(R.plurals.log_column_app, days, days)
         findViewById<SparklineView>(R.id.log_chart).apply {
-            values = log.attemptsPerBucket(now - DAY_MS, HOUR_MS, 24)
+            values = stats.hourly
             contentDescription = getString(R.string.log_chart_description, values.sum())
         }
     }
