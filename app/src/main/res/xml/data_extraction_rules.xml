@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backups and device-to-device transfer on Android 12 and newer. The blocked-traffic log
+    (hostnames blocked apps tried to reach) stays on this phone; the blocked list and settings
+    may be copied.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="blocklog.db" />
+        <exclude domain="database" path="blocklog.db-journal" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="blocklog.db" />
+        <exclude domain="database" path="blocklog.db-journal" />
+    </device-transfer>
+</data-extraction-rules>
