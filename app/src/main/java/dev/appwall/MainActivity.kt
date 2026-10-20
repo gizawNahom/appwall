@@ -24,6 +24,9 @@ import android.widget.ListView
 import android.widget.Switch
 import android.widget.TextView
 import dev.appwall.core.apps.AppEntry
+import dev.appwall.core.state.FirewallState
+import dev.appwall.core.state.OffReason
+import dev.appwall.core.state.Subscription
 import java.util.Calendar
 
 class MainActivity : Activity() {
@@ -52,6 +55,7 @@ class MainActivity : Activity() {
 
     /** PackageManager's change counter when the list was last loaded; used to spot installs/uninstalls. */
     private var packagesSequence = 0
+    private var statusSubscription: Subscription? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -155,6 +159,18 @@ class MainActivity : Activity() {
             .show()
     }
 
+    override fun onStart() {
+        super.onStart()
+        // The firewall's state changes in the service (revoked, failed, started): show it live.
+        statusSubscription = appWall.firewallStatus.changed.subscribe(::refreshState)
+    }
+
+    override fun onStop() {
+        statusSubscription?.unsubscribe()
+        statusSubscription = null
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
         // Reload the list if apps were installed or removed while we were away.
@@ -181,7 +197,7 @@ class MainActivity : Activity() {
 
     /** Asks the user for VPN permission the first time, then starts the firewall. */
     private fun requestStart() {
-        if (FirewallVpnService.anotherVpnActive(this)) {
+        if (appWall.anotherVpnActive()) {
             showOtherVpnDialog()
             refreshState() // flips the switch back off
             return
@@ -414,7 +430,8 @@ class MainActivity : Activity() {
         firewallSwitch.isChecked = rules.enabled
         updatingSwitch = false
 
-        val on = rules.enabled
+        // The switch says what the user chose; the card says what the firewall is actually doing.
+        val on = appWall.firewallStatus.status.running
         val blockedCount = if (appsLoaded) adapter.blockedCount() else rules.blocked().size
         findViewById<ImageView>(R.id.status_dot).setImageLevel(if (on) 1 else 0)
         findViewById<TextView>(R.id.wall_state).setText(if (on) R.string.wall_up else R.string.wall_down)
@@ -434,9 +451,13 @@ class MainActivity : Activity() {
         val total = today.values.sum()
         val blockedCount = if (appsLoaded) adapter.blockedCount() else rules.blocked().size
 
+        val firewall = appWall.firewallStatus.status.firewall
         findViewById<TextView>(R.id.attempts_today).text = when {
-            rules.enabled -> withMonoNumber(resources.getQuantityString(R.plurals.attempts_today, total, total), total.toString())
-            FirewallVpnService.anotherVpnActive(this) -> getString(R.string.status_other_vpn_short)
+            firewall !is FirewallState.Off -> withMonoNumber(resources.getQuantityString(R.plurals.attempts_today, total, total), total.toString())
+            appWall.anotherVpnActive() -> getString(R.string.status_other_vpn_short)
+            firewall.reason == OffReason.TUNNEL_FAILED -> getString(R.string.status_off_failed)
+            firewall.reason == OffReason.REVOKED -> getString(R.string.status_off_revoked)
+            firewall.reason == OffReason.NO_PERMISSION -> getString(R.string.status_off_no_permission)
             else -> resources.getQuantityString(R.plurals.turn_on_to_block, blockedCount, blockedCount)
         }
         val now = System.currentTimeMillis()

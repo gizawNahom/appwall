@@ -29,6 +29,16 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    fun onlyTheServiceSaysWhetherTheFirewallRuns() {
+        // Step 6: the status board is published by FirewallVpnService alone, so no screen can
+        // claim "on" from a saved setting; and no static back door to the service remains.
+        val publishers = sources.filter { file -> file.readText().contains(Regex("""(firewallStatus|status)\.(publish|stopped)\(""")) }
+        assertEquals(listOf("FirewallVpnService.kt"), publishers.map { it.name })
+        val statics = sources.filter { it.readText().contains("FirewallVpnService.running") || it.readText().contains("alwaysOnStatus()") }
+        assertEquals(emptyList<String>(), statics.map { it.name })
+    }
+
+    @Test
     fun sourcesWereFound() {
         // Guards the rules above against passing vacuously if the source path is wrong.
         assertEquals(true, sources.any { it.name == "MainActivity.kt" })

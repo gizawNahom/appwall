@@ -21,6 +21,10 @@ import android.util.Log
 import dev.appwall.core.firewall.DNS_SERVER
 import dev.appwall.core.firewall.TunnelPlan
 import dev.appwall.core.firewall.tunnelPlan
+import dev.appwall.core.state.AlwaysOn
+import dev.appwall.core.state.FirewallState
+import dev.appwall.core.state.FirewallStatus
+import dev.appwall.core.state.OffReason
 import dev.appwall.core.tunnel.TunnelSession
 
 /**
@@ -35,6 +39,9 @@ class FirewallVpnService : VpnService() {
      * only thing that closes a tunnel once handed one.
      */
     private lateinit var session: TunnelSession
+
+    /** Where this service says whether the firewall runs. Nothing else publishes to it. */
+    private val status get() = appWall.firewallStatus
 
     /** When the session was restarted after stopping unexpectedly (elapsed ms), for the per-minute cap. */
     private val sessionRestarts = ArrayDeque<Long>()
@@ -54,7 +61,6 @@ class FirewallVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
-        running = this
         val log = appWall.log
         val rules = Rules(this)
         session = TunnelSession(
@@ -80,8 +86,14 @@ class FirewallVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                status.publish(FirewallStatus(FirewallState.Off(OffReason.TURNED_OFF)))
                 closeTunnel()
                 stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_REFRESH_STATUS -> {
+                // Always-on is set in Android's settings, which don't tell us; a screen asks.
+                if (status.status.running) status.publish(status.status.copy(alwaysOn = alwaysOnNow())) else stopSelf()
                 return START_NOT_STICKY
             }
             ACTION_BLOCK_NEW_APP, ACTION_ALLOW_NEW_APP -> {
@@ -91,6 +103,7 @@ class FirewallVpnService : VpnService() {
         }
         // ACTION_APPLY from the UI, or a start by the system (e.g. Always-on VPN).
         Rules(this).enabled = true
+        if (!status.status.running) status.publish(FirewallStatus(FirewallState.Starting))
         applyRules()
         return START_STICKY
     }
@@ -127,6 +140,7 @@ class FirewallVpnService : VpnService() {
         if (routed == 0) {
             closeTunnel()
             showStatus(0)
+            publishOn(0)
             return
         }
 
@@ -135,6 +149,7 @@ class FirewallVpnService : VpnService() {
             // VPN permission was revoked or never granted. If we were started at boot with
             // startForegroundService(), Android insists we go foreground first, even to quit.
             Rules(this).enabled = false
+            status.publish(FirewallStatus(FirewallState.Off(OffReason.NO_PERMISSION)))
             closeTunnel()
             showStatus(0)
             stopSelf()
@@ -143,6 +158,19 @@ class FirewallVpnService : VpnService() {
         // The new tunnel is already up, so blocked apps are never left without one.
         session.switchTo(VpnTunnel(newTunnel))
         showStatus(routed)
+        publishOn(routed)
+    }
+
+    private fun publishOn(routedApps: Int) {
+        status.publish(FirewallStatus(FirewallState.On(routedApps), alwaysOnNow()))
+    }
+
+    /** Android's Always-on setting for AppWall; only the running VPN service may ask. */
+    private fun alwaysOnNow(): AlwaysOn = when {
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q -> AlwaysOn.UNKNOWN
+        isLockdownEnabled -> AlwaysOn.LOCKDOWN
+        isAlwaysOn -> AlwaysOn.ON
+        else -> AlwaysOn.OFF
     }
 
     private fun isInstalled(packageName: String): Boolean = try {
@@ -169,6 +197,7 @@ class FirewallVpnService : VpnService() {
         }
         Log.e(TAG, "Tunnel session keeps stopping; turning the firewall off")
         Rules(this).enabled = false
+        status.publish(FirewallStatus(FirewallState.Off(OffReason.TUNNEL_FAILED)))
         closeTunnel()
         showStopped()
         stopSelf()
@@ -255,12 +284,13 @@ class FirewallVpnService : VpnService() {
     override fun onRevoke() {
         // The user turned us off from system settings, or another VPN app took over.
         Rules(this).enabled = false
+        status.publish(FirewallStatus(FirewallState.Off(OffReason.REVOKED)))
         closeTunnel()
         stopSelf()
     }
 
     override fun onDestroy() {
-        running = null
+        status.stopped(OffReason.TURNED_OFF)
         unregisterReceiver(installReceiver)
         session.shutdown() // closes the tunnel and ends the session's thread
         hideStatus()
@@ -272,34 +302,11 @@ class FirewallVpnService : VpnService() {
         session.switchTo(null)
     }
 
-    /** Live Always-on state, as only the running VPN service can ask Android for it. */
-    data class AlwaysOnStatus(val alwaysOn: Boolean, val blocksWithoutVpn: Boolean)
-
     companion object {
-        @Volatile private var running: FirewallVpnService? = null
-
-        /**
-         * True when some other app's VPN is up. Android allows one VPN at a time, so AppWall
-         * can't run then. Any VPN seen while our own service isn't running can't be ours.
-         */
-        fun anotherVpnActive(context: Context): Boolean {
-            if (running != null) return false
-            val connectivity = context.getSystemService(ConnectivityManager::class.java)
-            @Suppress("DEPRECATION") // allNetworks: still the simplest way to list current networks
-            return connectivity.allNetworks.any {
-                connectivity.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
-            }
-        }
-
-        /** Null when it can't be known: the firewall isn't running, or Android is older than 10. */
-        fun alwaysOnStatus(): AlwaysOnStatus? {
-            val service = running ?: return null
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
-            return AlwaysOnStatus(service.isAlwaysOn, service.isLockdownEnabled)
-        }
-
         const val ACTION_APPLY = "dev.appwall.APPLY"
         const val ACTION_STOP = "dev.appwall.STOP"
+        /** Re-check Always-on and publish it, if running; sent by screens showing it. */
+        const val ACTION_REFRESH_STATUS = "dev.appwall.REFRESH_STATUS"
         const val ACTION_BLOCK_NEW_APP = "dev.appwall.BLOCK_NEW_APP"
         const val ACTION_ALLOW_NEW_APP = "dev.appwall.ALLOW_NEW_APP"
         private const val TAG = "AppWall"

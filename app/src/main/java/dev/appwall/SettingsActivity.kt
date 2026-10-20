@@ -13,10 +13,13 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import dev.appwall.core.firewall.NewAppMode
+import dev.appwall.core.state.AlwaysOn
+import dev.appwall.core.state.Subscription
 
 class SettingsActivity : Activity() {
 
     private lateinit var rules: Rules
+    private var statusSubscription: Subscription? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,17 +93,38 @@ class SettingsActivity : Activity() {
         findViewById<View>(R.id.license).setOnClickListener { openUrl(getString(R.string.license_url)) }
     }
 
+    override fun onStart() {
+        super.onStart()
+        statusSubscription = appWall.firewallStatus.changed.subscribe(::showAlwaysOn)
+    }
+
+    override fun onStop() {
+        statusSubscription?.unsubscribe()
+        statusSubscription = null
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
-        // Refreshed on every return, so coming back from Android's settings shows the result.
-        val status = FirewallVpnService.alwaysOnStatus()
+        showAlwaysOn()
+        // Coming back from Android's settings: ask the running firewall to re-check Always-on.
+        // Its answer arrives through the status signal.
+        if (appWall.firewallStatus.status.running) {
+            startService(Intent(this, FirewallVpnService::class.java).setAction(FirewallVpnService.ACTION_REFRESH_STATUS))
+        }
+    }
+
+    private fun showAlwaysOn() {
         // Text, then the dot and text color: teal when on, coral for a problem, grey otherwise.
-        val (text, level) = when {
-            status == null && FirewallVpnService.anotherVpnActive(this) -> R.string.settings_always_on_other_vpn to Level.PROBLEM
-            status == null -> R.string.settings_always_on_unknown to Level.NEUTRAL
-            status.blocksWithoutVpn -> R.string.settings_always_on_lockdown to Level.PROBLEM
-            status.alwaysOn -> R.string.settings_always_on_on to Level.ON
-            else -> R.string.settings_always_on_off to Level.NEUTRAL
+        val (text, level) = when (appWall.firewallStatus.status.alwaysOn) {
+            AlwaysOn.UNKNOWN -> if (appWall.anotherVpnActive()) {
+                R.string.settings_always_on_other_vpn to Level.PROBLEM
+            } else {
+                R.string.settings_always_on_unknown to Level.NEUTRAL
+            }
+            AlwaysOn.LOCKDOWN -> R.string.settings_always_on_lockdown to Level.PROBLEM
+            AlwaysOn.ON -> R.string.settings_always_on_on to Level.ON
+            AlwaysOn.OFF -> R.string.settings_always_on_off to Level.NEUTRAL
         }
         findViewById<TextView>(R.id.always_on_status).apply {
             setText(text)

@@ -24,6 +24,9 @@
         <item quantity="one">Turn it on to block %d app</item>
         <item quantity="other">Turn it on to block %d apps</item>
     </plurals>
+    <string name="status_off_failed">AppWall turned itself off after an error. Turn it back on to block again.</string>
+    <string name="status_off_revoked">Android turned AppWall off, from its settings or for another VPN app.</string>
+    <string name="status_off_no_permission">AppWall needs VPN permission. Turn it on to grant it.</string>
     <string name="status_other_vpn_short">Another VPN app is active, so AppWall can\'t run</string>
     <string name="sparkline_description">Blocked attempts in two-hour steps over the last day, newest on the right</string>
     <string name="stat_allowed">Allowed</string>
