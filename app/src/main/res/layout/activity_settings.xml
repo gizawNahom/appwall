@@ -1,208 +1,333 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Settings: mono section labels over hairline cards of rows. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true">
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:paddingBottom="24dp">
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="12dp">
+
+        <ImageButton
+            android:id="@+id/settings_back"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/back"
+            android:src="@drawable/ic_back" />
 
         <TextView
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:paddingHorizontal="16dp"
-            android:paddingTop="16dp"
-            android:paddingBottom="8dp"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1"
+            android:accessibilityHeading="true"
             android:text="@string/settings_title"
-            android:textAppearance="@style/TextAppearance.AppWall.Headline" />
+            android:textAppearance="@style/TextAppearance.AppWall.Title" />
+    </LinearLayout>
 
-        <!-- Firewall -->
-        <TextView
-            style="@style/SettingsSection"
-            android:text="@string/settings_section_firewall" />
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
 
-        <Switch
-            android:id="@+id/start_on_boot"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:minHeight="48dp"
+            android:orientation="vertical"
             android:paddingHorizontal="16dp"
-            android:text="@string/settings_start_on_boot"
-            android:textAppearance="@style/TextAppearance.AppWall.Subhead" />
+            android:paddingBottom="24dp">
 
-        <TextView
-            style="@style/SettingsNote"
-            android:text="@string/settings_start_on_boot_note" />
+            <!-- Firewall -->
+            <TextView
+                style="@style/SettingsSection"
+                android:paddingTop="12dp"
+                android:text="@string/settings_section_firewall" />
 
-        <!-- Looks like a link to another screen (chevron) because tapping it leaves for Android's settings. -->
-        <LinearLayout
-            android:id="@+id/always_on"
-            style="@style/SettingsRow"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal">
+            <LinearLayout style="@style/SettingsCard">
 
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
+                <LinearLayout
+                    android:id="@+id/start_on_boot_row"
+                    style="@style/SettingsRow">
 
-                <TextView
-                    style="@style/SettingsRowTitle"
-                    android:text="@string/settings_always_on_title" />
+                    <LinearLayout style="@style/SettingsRowText">
 
-                <TextView
-                    android:id="@+id/always_on_status"
-                    style="@style/SettingsRowSummary"
-                    android:textColor="?android:attr/textColorPrimary" />
+                        <TextView
+                            style="@style/SettingsRowTitle"
+                            android:text="@string/settings_start_on_boot" />
 
-                <TextView
-                    style="@style/SettingsRowSummary"
-                    android:text="@string/settings_always_on_summary" />
+                        <TextView
+                            style="@style/SettingsRowSummary"
+                            android:text="@string/settings_start_on_boot_note" />
+                    </LinearLayout>
+
+                    <Switch
+                        android:id="@+id/start_on_boot"
+                        style="@style/SettingsSwitch"
+                        android:contentDescription="@string/settings_start_on_boot" />
+                </LinearLayout>
+
+                <View style="@style/SettingsDivider" />
+
+                <!-- Chevron: tapping leaves for Android's own VPN settings. -->
+                <LinearLayout
+                    android:id="@+id/always_on"
+                    style="@style/SettingsRow">
+
+                    <LinearLayout style="@style/SettingsRowText">
+
+                        <TextView
+                            style="@style/SettingsRowTitle"
+                            android:text="@string/settings_always_on_title" />
+
+                        <TextView
+                            android:id="@+id/always_on_status"
+                            style="@style/SettingsRowSummary"
+                            android:layout_marginTop="4dp"
+                            android:drawablePadding="8dp"
+                            android:gravity="center_vertical"
+                            android:textAppearance="@style/TextAppearance.AppWall.Body1" />
+
+                        <TextView
+                            style="@style/SettingsRowSummary"
+                            android:layout_marginTop="4dp"
+                            android:text="@string/settings_always_on_summary" />
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_marginStart="12dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_chevron" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- New apps -->
+            <TextView
+                style="@style/SettingsSection"
+                android:text="@string/settings_new_app_mode" />
+
+            <LinearLayout style="@style/SettingsCard">
+
+                <RadioGroup
+                    android:id="@+id/new_app_mode"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:divider="@color/line"
+                    android:paddingHorizontal="12dp"
+                    android:showDividers="middle">
+
+                    <RadioButton
+                        android:id="@+id/new_app_ask"
+                        style="@style/SettingsRadio"
+                        android:text="@string/settings_new_app_ask" />
+
+                    <RadioButton
+                        android:id="@+id/new_app_allow"
+                        style="@style/SettingsRadio"
+                        android:text="@string/settings_new_app_allow" />
+
+                    <RadioButton
+                        android:id="@+id/new_app_block"
+                        style="@style/SettingsRadio"
+                        android:text="@string/settings_new_app_block" />
+                </RadioGroup>
             </LinearLayout>
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:importantForAccessibility="no"
-                android:text="@string/chevron"
-                android:textAppearance="@style/TextAppearance.AppWall.Headline" />
+                style="@style/SettingsNote"
+                android:text="@string/settings_new_app_note" />
+
+            <!-- Blocked traffic log -->
+            <TextView
+                style="@style/SettingsSection"
+                android:text="@string/settings_section_log" />
+
+            <LinearLayout style="@style/SettingsCard">
+
+                <LinearLayout
+                    android:id="@+id/logging_row"
+                    style="@style/SettingsRow">
+
+                    <LinearLayout style="@style/SettingsRowText">
+
+                        <TextView
+                            style="@style/SettingsRowTitle"
+                            android:text="@string/settings_logging" />
+
+                        <TextView
+                            style="@style/SettingsRowSummary"
+                            android:text="@string/settings_logging_note" />
+                    </LinearLayout>
+
+                    <Switch
+                        android:id="@+id/logging"
+                        style="@style/SettingsSwitch"
+                        android:contentDescription="@string/settings_logging" />
+                </LinearLayout>
+
+                <View style="@style/SettingsDivider" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        style="@style/SettingsRowTitle"
+                        android:text="@string/settings_retention" />
+
+                    <!-- 1 day | 7 days | 30 days -->
+                    <LinearLayout
+                        android:id="@+id/retention"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:background="@drawable/bg_field"
+                        android:orientation="horizontal"
+                        android:padding="3dp">
+
+                        <TextView
+                            android:id="@+id/retention_1"
+                            style="@style/SettingsSegment"
+                            android:text="@string/settings_retention_1" />
+
+                        <TextView
+                            android:id="@+id/retention_7"
+                            style="@style/SettingsSegment"
+                            android:layout_marginStart="3dp"
+                            android:text="@string/settings_retention_7" />
+
+                        <TextView
+                            android:id="@+id/retention_30"
+                            style="@style/SettingsSegment"
+                            android:layout_marginStart="3dp"
+                            android:text="@string/settings_retention_30" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <View style="@style/SettingsDivider" />
+
+                <LinearLayout
+                    android:id="@+id/open_log"
+                    style="@style/SettingsRow">
+
+                    <TextView
+                        style="@style/SettingsRowTitle"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="@string/settings_open_log" />
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_chevron" />
+                </LinearLayout>
+
+                <View style="@style/SettingsDivider" />
+
+                <LinearLayout
+                    android:id="@+id/clear_log"
+                    style="@style/SettingsRow">
+
+                    <TextView
+                        style="@style/SettingsRowTitle"
+                        android:text="@string/settings_clear_log"
+                        android:textColor="@color/blocked" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- About -->
+            <TextView
+                style="@style/SettingsSection"
+                android:text="@string/settings_section_about" />
+
+            <LinearLayout style="@style/SettingsCard">
+
+                <LinearLayout
+                    style="@style/SettingsRow"
+                    android:background="@null">
+
+                    <ImageView
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_mark" />
+
+                    <TextView
+                        style="@style/SettingsRowTitle"
+                        android:layout_width="0dp"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:text="@string/app_name" />
+
+                    <TextView
+                        android:id="@+id/version"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="@style/TextAppearance.AppWall.Mono.Small" />
+                </LinearLayout>
+
+                <View style="@style/SettingsDivider" />
+
+                <LinearLayout
+                    android:id="@+id/source_code"
+                    style="@style/SettingsRow">
+
+                    <LinearLayout style="@style/SettingsRowText">
+
+                        <TextView
+                            style="@style/SettingsRowTitle"
+                            android:text="@string/settings_source_code" />
+
+                        <TextView
+                            style="@style/SettingsRowSummary"
+                            android:text="@string/repo_url_display"
+                            android:textAppearance="@style/TextAppearance.AppWall.Mono.Small" />
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_marginStart="12dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_external" />
+                </LinearLayout>
+
+                <View style="@style/SettingsDivider" />
+
+                <LinearLayout
+                    android:id="@+id/license"
+                    style="@style/SettingsRow">
+
+                    <LinearLayout style="@style/SettingsRowText">
+
+                        <TextView
+                            style="@style/SettingsRowTitle"
+                            android:text="@string/settings_license" />
+
+                        <TextView
+                            style="@style/SettingsRowSummary"
+                            android:text="@string/settings_license_summary" />
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_marginStart="12dp"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_external" />
+                </LinearLayout>
+            </LinearLayout>
         </LinearLayout>
-
-        <!-- New apps -->
-        <TextView
-            style="@style/SettingsSection"
-            android:text="@string/settings_section_new_apps" />
-
-        <TextView
-            style="@style/SettingsLabel"
-            android:text="@string/settings_new_app_mode" />
-
-        <RadioGroup
-            android:id="@+id/new_app_mode"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingHorizontal="12dp">
-
-            <RadioButton
-                android:id="@+id/new_app_ask"
-                style="@style/SettingsRadio"
-                android:text="@string/settings_new_app_ask" />
-
-            <RadioButton
-                android:id="@+id/new_app_allow"
-                style="@style/SettingsRadio"
-                android:text="@string/settings_new_app_allow" />
-
-            <RadioButton
-                android:id="@+id/new_app_block"
-                style="@style/SettingsRadio"
-                android:text="@string/settings_new_app_block" />
-        </RadioGroup>
-
-        <TextView
-            style="@style/SettingsNote"
-            android:text="@string/settings_new_app_note" />
-
-        <!-- Blocked traffic log -->
-        <TextView
-            style="@style/SettingsSection"
-            android:text="@string/settings_section_log" />
-
-        <Switch
-            android:id="@+id/logging"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:paddingHorizontal="16dp"
-            android:text="@string/settings_logging"
-            android:textAppearance="@style/TextAppearance.AppWall.Subhead" />
-
-        <TextView
-            style="@style/SettingsLabel"
-            android:text="@string/settings_retention" />
-
-        <RadioGroup
-            android:id="@+id/retention"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:paddingHorizontal="12dp">
-
-            <RadioButton
-                android:id="@+id/retention_1"
-                style="@style/SettingsRadio"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:text="@string/settings_retention_1" />
-
-            <RadioButton
-                android:id="@+id/retention_7"
-                style="@style/SettingsRadio"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:text="@string/settings_retention_7" />
-
-            <RadioButton
-                android:id="@+id/retention_30"
-                style="@style/SettingsRadio"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:text="@string/settings_retention_30" />
-        </RadioGroup>
-
-        <Button
-            android:id="@+id/clear_log"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="@string/settings_clear_log" />
-
-        <!-- About -->
-        <TextView
-            style="@style/SettingsSection"
-            android:text="@string/settings_section_about" />
-
-        <LinearLayout style="@style/SettingsRow">
-
-            <TextView
-                style="@style/SettingsRowTitle"
-                android:text="@string/app_name" />
-
-            <TextView
-                android:id="@+id/version"
-                style="@style/SettingsRowSummary" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/source_code"
-            style="@style/SettingsRow">
-
-            <TextView
-                style="@style/SettingsRowTitle"
-                android:text="@string/settings_source_code" />
-
-            <TextView
-                style="@style/SettingsRowSummary"
-                android:text="@string/repo_url_display" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/license"
-            style="@style/SettingsRow">
-
-            <TextView
-                style="@style/SettingsRowTitle"
-                android:text="@string/settings_license" />
-
-            <TextView
-                style="@style/SettingsRowSummary"
-                android:text="@string/settings_license_summary" />
-        </LinearLayout>
-    </LinearLayout>
-</ScrollView>
+    </ScrollView>
+</LinearLayout>

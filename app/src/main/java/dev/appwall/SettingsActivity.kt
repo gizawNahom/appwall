@@ -21,12 +21,10 @@ class SettingsActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
         rules = Rules(this)
+        findViewById<View>(R.id.settings_back).setOnClickListener { finish() }
 
         // Firewall
-        findViewById<Switch>(R.id.start_on_boot).apply {
-            isChecked = rules.startOnBoot
-            setOnCheckedChangeListener { _, on -> rules.startOnBoot = on }
-        }
+        bindSwitch(R.id.start_on_boot_row, R.id.start_on_boot, rules.startOnBoot) { rules.startOnBoot = it }
         // Apps can't turn on Always-on VPN themselves, and Android has no link to one VPN's own
         // page, only to the list of VPNs. So explain the steps first, then open that list.
         findViewById<View>(R.id.always_on).setOnClickListener {
@@ -58,30 +56,30 @@ class SettingsActivity : Activity() {
 
         // Blocked traffic log
         val log = BlockLog.get(this)
-        findViewById<Switch>(R.id.logging).apply {
-            isChecked = rules.loggingEnabled
-            setOnCheckedChangeListener { _, on -> rules.loggingEnabled = on }
+        bindSwitch(R.id.logging_row, R.id.logging, rules.loggingEnabled) { rules.loggingEnabled = it }
+        val segments = listOf(R.id.retention_1 to 1, R.id.retention_7 to 7, R.id.retention_30 to 30)
+        fun showRetention() = segments.forEach { (id, days) ->
+            findViewById<View>(id).isSelected = days == rules.logRetentionDays
         }
-        findViewById<RadioGroup>(R.id.retention).apply {
-            check(
-                when (rules.logRetentionDays) {
-                    1 -> R.id.retention_1
-                    30 -> R.id.retention_30
-                    else -> R.id.retention_7
-                }
-            )
-            setOnCheckedChangeListener { _, id ->
-                rules.logRetentionDays = when (id) {
-                    R.id.retention_1 -> 1
-                    R.id.retention_30 -> 30
-                    else -> 7
-                }
+        segments.forEach { (id, days) ->
+            findViewById<View>(id).setOnClickListener {
+                rules.logRetentionDays = days
                 log.prune()
+                showRetention()
             }
         }
+        showRetention()
+        findViewById<View>(R.id.open_log).setOnClickListener { startActivity(Intent(this, LogActivity::class.java)) }
         findViewById<View>(R.id.clear_log).setOnClickListener {
-            log.clear()
-            Toast.makeText(this, R.string.settings_log_cleared, Toast.LENGTH_SHORT).show()
+            AlertDialog.Builder(this)
+                .setTitle(R.string.log_clear_title)
+                .setMessage(R.string.log_clear_text)
+                .setPositiveButton(R.string.log_clear) { _, _ ->
+                    log.clear()
+                    Toast.makeText(this, R.string.settings_log_cleared, Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
         }
 
         // About
@@ -95,13 +93,34 @@ class SettingsActivity : Activity() {
         super.onResume()
         // Refreshed on every return, so coming back from Android's settings shows the result.
         val status = FirewallVpnService.alwaysOnStatus()
-        findViewById<TextView>(R.id.always_on_status).text = when {
-            status == null && FirewallVpnService.anotherVpnActive(this) -> getString(R.string.settings_always_on_other_vpn)
-            status == null -> getString(R.string.settings_always_on_unknown)
-            status.blocksWithoutVpn -> getString(R.string.settings_always_on_lockdown)
-            status.alwaysOn -> getString(R.string.settings_always_on_on)
-            else -> getString(R.string.settings_always_on_off)
+        // Text, then the dot and text color: teal when on, coral for a problem, grey otherwise.
+        val (text, level) = when {
+            status == null && FirewallVpnService.anotherVpnActive(this) -> R.string.settings_always_on_other_vpn to Level.PROBLEM
+            status == null -> R.string.settings_always_on_unknown to Level.NEUTRAL
+            status.blocksWithoutVpn -> R.string.settings_always_on_lockdown to Level.PROBLEM
+            status.alwaysOn -> R.string.settings_always_on_on to Level.ON
+            else -> R.string.settings_always_on_off to Level.NEUTRAL
         }
+        findViewById<TextView>(R.id.always_on_status).apply {
+            setText(text)
+            setTextColor(getColor(if (level == Level.PROBLEM) R.color.blocked else R.color.text))
+            val dot = when (level) {
+                Level.ON -> R.drawable.dot_accent
+                Level.PROBLEM -> R.drawable.dot_blocked
+                Level.NEUTRAL -> R.drawable.dot_neutral
+            }
+            setCompoundDrawablesRelativeWithIntrinsicBounds(dot, 0, 0, 0)
+        }
+    }
+
+    private enum class Level { ON, NEUTRAL, PROBLEM }
+
+    /** A row with a switch at its end: tapping anywhere on the row flips the switch. */
+    private fun bindSwitch(rowId: Int, switchId: Int, value: Boolean, onChange: (Boolean) -> Unit) {
+        val switch = findViewById<Switch>(switchId)
+        switch.isChecked = value
+        switch.setOnCheckedChangeListener { _, on -> onChange(on) }
+        findViewById<View>(rowId).setOnClickListener { switch.toggle() }
     }
 
     private fun openUrl(url: String) = open(Intent(Intent.ACTION_VIEW, Uri.parse(url)))

@@ -2,61 +2,96 @@
 <resources>
     <!-- Settings screen building blocks. -->
 
+    <!-- Mono label above each card, e.g. "FIREWALL". -->
     <style name="SettingsSection">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:paddingHorizontal">16dp</item>
+        <item name="android:paddingHorizontal">4dp</item>
         <item name="android:paddingTop">24dp</item>
-        <item name="android:paddingBottom">4dp</item>
-        <item name="android:textAppearance">@style/TextAppearance.AppWall.Body2</item>
-        <item name="android:textColor">?android:attr/colorAccent</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:accessibilityHeading">true</item>
+        <item name="android:textAppearance">@style/TextAppearance.AppWall.Label</item>
+    </style>
+
+    <!-- A card of rows; rows are split by SettingsDivider. Clipped so ripples keep the corners. -->
+    <style name="SettingsCard">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:background">@drawable/bg_card</item>
+        <item name="android:clipToOutline">true</item>
+    </style>
+
+    <style name="SettingsDivider">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">1dp</item>
+        <item name="android:background">@color/line</item>
     </style>
 
     <style name="SettingsRow">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:orientation">vertical</item>
+        <item name="android:orientation">horizontal</item>
         <item name="android:minHeight">56dp</item>
         <item name="android:gravity">center_vertical</item>
         <item name="android:paddingHorizontal">16dp</item>
-        <item name="android:paddingVertical">8dp</item>
+        <item name="android:paddingVertical">12dp</item>
         <item name="android:background">?android:attr/selectableItemBackground</item>
+    </style>
+
+    <!-- The text column of a row: a title and optional summary lines. -->
+    <style name="SettingsRowText">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:orientation">vertical</item>
     </style>
 
     <style name="SettingsRowTitle">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:textAppearance">@style/TextAppearance.AppWall.Subhead</item>
+        <item name="android:textAppearance">@style/TextAppearance.AppWall.Body2</item>
     </style>
 
     <style name="SettingsRowSummary">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:textAppearance">@style/TextAppearance.AppWall.Body1</item>
-        <item name="android:textColor">?android:attr/textColorSecondary</item>
-    </style>
-
-    <style name="SettingsLabel">
-        <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">wrap_content</item>
-        <item name="android:paddingHorizontal">16dp</item>
-        <item name="android:paddingTop">8dp</item>
-        <item name="android:textAppearance">@style/TextAppearance.AppWall.Subhead</item>
-    </style>
-
-    <style name="SettingsNote">
-        <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">wrap_content</item>
-        <item name="android:paddingHorizontal">16dp</item>
-        <item name="android:paddingTop">4dp</item>
+        <item name="android:layout_marginTop">2dp</item>
         <item name="android:textAppearance">@style/TextAppearance.AppWall.Caption</item>
+    </style>
+
+    <!-- A switch at the end of a row; the row's text labels it. -->
+    <style name="SettingsSwitch">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">12dp</item>
     </style>
 
     <style name="SettingsRadio">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:minHeight">48dp</item>
-        <item name="android:textAppearance">@style/TextAppearance.AppWall.Body1</item>
+        <item name="android:minHeight">52dp</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.AppWall.Body2</item>
+    </style>
+
+    <!-- Note under a card. -->
+    <style name="SettingsNote">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:paddingHorizontal">4dp</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.AppWall.Caption</item>
+    </style>
+
+    <style name="SettingsSegment">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">36dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:background">@drawable/bg_segment</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textAppearance">@style/TextAppearance.AppWall.Body2</item>
     </style>
 
     <!-- Picker filter chip. -->
