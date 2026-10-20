@@ -22,6 +22,7 @@ class TunnelReader(context: Context, private val tunnel: ParcelFileDescriptor) :
     private val rules = Rules(appContext)
     private val log = BlockLog.get(appContext)
     private val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
+    private val tries = TryTracker(::ownerOf) { owner, packet -> log.record(owner, packet) }
 
     @Volatile private var stopped = false
 
@@ -39,8 +40,11 @@ class TunnelReader(context: Context, private val tunnel: ParcelFileDescriptor) :
         }
         try {
             while (!stopped) {
-                // Wake up at least once a second to notice shutdown().
-                if (Os.poll(arrayOf(poll), 1000) == 0) continue
+                // Wake up at least once a second to notice shutdown() and settle pending tries.
+                if (Os.poll(arrayOf(poll), 1000) == 0) {
+                    tries.sweep(System.currentTimeMillis())
+                    continue
+                }
                 if (poll.revents.toInt() and (OsConstants.POLLERR or OsConstants.POLLHUP or OsConstants.POLLNVAL) != 0) break
                 val length = try {
                     Os.read(fd, buffer, 0, buffer.size)
@@ -65,9 +69,10 @@ class TunnelReader(context: Context, private val tunnel: ParcelFileDescriptor) :
         if (packet.protocol == PacketParser.ICMPV6) return
         // Android probing our fake DNS server for Private DNS (DNS-over-TLS); also not an app.
         if (packet.destinationPort == 853 && packet.destination.hostAddress == FirewallVpnService.DNS_SERVER) return
-        val owner = ownerOf(packet)
-        if (owner == null && packet.protocol != PacketParser.TCP && packet.protocol != PacketParser.UDP) return
-        log.record(owner, packet)
+        // Android can only name the app for TCP and UDP; anything else is attributable only
+        // when a single app is blocked.
+        if (packet.protocol != PacketParser.TCP && packet.protocol != PacketParser.UDP && rules.blocked().size != 1) return
+        tries.onPacket(packet, System.currentTimeMillis())
     }
 
     /** Which blocked app sent this packet, or null if Android can't tell us. */
