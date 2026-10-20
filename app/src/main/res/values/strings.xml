@@ -35,6 +35,21 @@
     <string name="column_today">TODAY</string>
     <string name="block_an_app">Block an app</string>
     <string name="undo">Undo</string>
+
+    <!-- Expanded row -->
+    <string name="row_collapsed">%1$s</string>
+    <string name="row_expanded">%1$s Expanded.</string>
+    <string name="details_activity">Last attempt %1$s · %2$s</string>
+    <plurals name="details_week">
+        <item quantity="one">%d in the last 7 days</item>
+        <item quantity="other">%d in the last 7 days</item>
+    </plurals>
+    <string name="details_no_attempts">No blocked attempts logged yet.</string>
+    <string name="details_chart_caption">LAST 24 HOURS</string>
+    <string name="details_chart_description">Blocked attempts per hour over the last 24 hours, %d in total</string>
+    <string name="details_more">+%d more</string>
+    <string name="details_allowed">Allowed. AppWall only sees traffic from blocked apps, so nothing is logged while it\'s allowed.</string>
+    <string name="details_full_log">Full log</string>
     <plurals name="undo_blocked_n">
         <item quantity="one">%d app blocked</item>
         <item quantity="other">%d apps blocked</item>
@@ -59,18 +74,12 @@
     <string name="undo_blocked">%1$s blocked</string>
     <string name="undo_allowed">%1$s allowed</string>
     <string name="block_app_named">Block %1$s</string>
-    <string name="allowed_app_message">Allowed. It can use the internet.</string>
     <string name="state_blocked">BLOCKED</string>
     <string name="search_all_hint">Search all apps</string>
     <string name="search_close">Close search</string>
     <string name="search_clear">Clear search</string>
     <string name="search_prompt">Type an app\'s name or package to find it, blocked or not.</string>
     <string name="allow_app">Allow %1$s</string>
-    <string name="view_log">View log</string>
-    <plurals name="blocked_app_message">
-        <item quantity="one">Blocked. It tried to connect %d time today.</item>
-        <item quantity="other">Blocked. It tried to connect %d times today.</item>
-    </plurals>
     <plurals name="row_blocked_description">
         <item quantity="one">%1$s, blocked, %2$d attempt today. Tap for details.</item>
         <item quantity="other">%1$s, blocked, %2$d attempts today. Tap for details.</item>

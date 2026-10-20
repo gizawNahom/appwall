@@ -80,7 +80,7 @@ class MainActivity : Activity() {
             if (on) requestStart() else stopFirewall()
         }
 
-        adapter = AppListAdapter(this, rules, icons) { app -> toggleBlocked(app) }
+        adapter = AppListAdapter(this, rules, icons, log) { app, action -> onRowAction(app, action) }
         adapter.setShowSystem(rules.showSystemApps)
         findViewById<ListView>(R.id.app_list).apply {
             adapter = this@MainActivity.adapter
@@ -263,13 +263,22 @@ class MainActivity : Activity() {
         refreshState()
     }
 
-    /** A row's Block/Allow button: flip the rule, with a few seconds to undo it. */
-    private fun toggleBlocked(app: AppEntry) {
-        val nowBlocked = !rules.isBlocked(app.packageName)
-        rules.setBlocked(app.packageName, nowBlocked)
+    /** A button in a row: change the app's rule (with a few seconds to undo it), or open its log. */
+    private fun onRowAction(app: AppEntry, action: AppListAdapter.Action) {
+        val wasBlocked = rules.isBlocked(app.packageName)
+        when (action) {
+            AppListAdapter.Action.FULL_LOG -> {
+                startActivity(Intent(this, LogActivity::class.java).putExtra(LogActivity.EXTRA_PACKAGE, app.packageName))
+                return
+            }
+            AppListAdapter.Action.TOGGLE -> rules.setBlocked(app.packageName, !wasBlocked)
+            AppListAdapter.Action.ALLOW -> rules.setBlocked(app.packageName, false)
+            AppListAdapter.Action.BLOCK -> rules.setBlocked(app.packageName, true)
+        }
         onRulesChanged()
-        showUndo(getString(if (nowBlocked) R.string.undo_blocked else R.string.undo_allowed, app.label)) {
-            rules.setBlocked(app.packageName, !nowBlocked)
+        val message = getString(if (rules.isBlocked(app.packageName)) R.string.undo_blocked else R.string.undo_allowed, app.label)
+        showUndo(message) {
+            rules.setBlocked(app.packageName, wasBlocked)
             onRulesChanged()
         }
     }
@@ -300,26 +309,8 @@ class MainActivity : Activity() {
         handler.postDelayed(hideUndo, UNDO_MS)
     }
 
-    /** Tapping a row shows what's known about the app; changing its rule is an explicit choice there. */
-    private fun onAppTapped(app: AppEntry) {
-        val blocked = rules.isBlocked(app.packageName)
-        val attempts = log.attemptsSince(startOfToday())[app.packageName] ?: 0
-        val dialog = AlertDialog.Builder(this)
-            .setIcon(icons[app.packageName])
-            .setTitle(app.label)
-            .setNegativeButton(android.R.string.cancel, null)
-        if (blocked) {
-            dialog.setMessage(resources.getQuantityString(R.plurals.blocked_app_message, attempts, attempts))
-                .setPositiveButton(getString(R.string.allow_app, app.label)) { _, _ -> toggleBlocked(app) }
-                .setNeutralButton(R.string.view_log) { _, _ ->
-                    startActivity(Intent(this, LogActivity::class.java).putExtra(LogActivity.EXTRA_PACKAGE, app.packageName))
-                }
-        } else {
-            dialog.setMessage(R.string.allowed_app_message)
-                .setPositiveButton(getString(R.string.block_app_named, app.label)) { _, _ -> toggleBlocked(app) }
-        }
-        dialog.show()
-    }
+    /** Tapping a row opens it in place to show what's known about the app; tapping again closes it. */
+    private fun onAppTapped(app: AppEntry) = adapter.toggleExpanded(app)
 
     private fun selectTab(tab: AppListAdapter.Tab) {
         adapter.tab = tab
@@ -455,7 +446,7 @@ class MainActivity : Activity() {
             values = log.attemptsPerBucket(now - DAY_MS, DAY_MS / SPARK_BARS, SPARK_BARS)
             contentDescription = getString(R.string.sparkline_description)
         }
-        findViewById<TextView>(R.id.last_attempt).text = shortAgo(log.lastAttemptTime(), now)
+        findViewById<TextView>(R.id.last_attempt).text = TimeText.shortAgo(this, log.lastAttemptTime(), now)
         findViewById<TextView>(R.id.allowed_count).text = if (appsLoaded) adapter.allowedCount().toString() else "—"
         updateEmptyState()
     }
@@ -475,18 +466,6 @@ class MainActivity : Activity() {
         return SpannableString(text).apply {
             setSpan(FontSpan(resources.getFont(R.font.geist_mono)), name.length + 2, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             setSpan(android.text.style.ForegroundColorSpan(getColor(R.color.text_secondary)), name.length + 2, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-    }
-
-    /** "now", "2m", "3h", "4d"; "—" when nothing has been blocked yet. */
-    private fun shortAgo(time: Long?, now: Long): String {
-        if (time == null) return "—"
-        val minutes = (now - time) / 60_000
-        return when {
-            minutes < 1 -> getString(R.string.ago_now)
-            minutes < 60 -> getString(R.string.ago_minutes, minutes)
-            minutes < 24 * 60 -> getString(R.string.ago_hours, minutes / 60)
-            else -> getString(R.string.ago_days, minutes / (24 * 60))
         }
     }
 

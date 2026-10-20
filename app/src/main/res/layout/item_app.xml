@@ -1,85 +1,174 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One app row. Blocked tab: activity meter + today's count. Allowed tab and search: a Block or Allow button. -->
+<!--
+    One app row. Blocked tab: activity meter + today's count. Allowed tab and search: a Block or
+    Allow button. Tapping the row expands the details section below it (one row at a time).
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:gravity="center_vertical"
-    android:minHeight="60dp"
-    android:orientation="horizontal"
+    android:orientation="vertical"
     android:paddingHorizontal="4dp">
 
-    <ImageView
-        android:id="@+id/app_icon"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:importantForAccessibility="no" />
-
     <LinearLayout
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
-        android:layout_weight="1"
-        android:orientation="vertical">
+        android:gravity="center_vertical"
+        android:minHeight="60dp"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/app_icon"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:importantForAccessibility="no" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/app_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textAppearance="@style/TextAppearance.AppWall.Body2" />
+
+                <!-- Search results only: marks the apps that are blocked. -->
+                <TextView
+                    android:id="@+id/app_state"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/state_blocked"
+                    android:textAppearance="@style/TextAppearance.AppWall.Label"
+                    android:textColor="@color/blocked" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/app_package"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="middle"
+                android:maxLines="1"
+                android:textAppearance="@style/TextAppearance.AppWall.Mono.Small" />
+        </LinearLayout>
+
+        <dev.appwall.MeterView
+            android:id="@+id/app_meter"
+            android:layout_width="56dp"
+            android:layout_height="4dp"
+            android:layout_marginStart="12dp" />
+
+        <TextView
+            android:id="@+id/app_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:gravity="end"
+            android:minWidth="28dp"
+            android:textAppearance="@style/TextAppearance.AppWall.Mono" />
+
+        <!-- Quick Block/Allow. Not focusable, so the row itself stays tappable. -->
+        <Button
+            android:id="@+id/app_action"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_text_button"
+            android:focusable="false"
+            android:minWidth="64dp"
+            android:paddingHorizontal="12dp"
+            android:stateListAnimator="@null"
+            android:textAppearance="@style/TextAppearance.AppWall.Button"
+            android:textColor="@color/text" />
+    </LinearLayout>
+
+    <!-- Details: shown when the row is expanded. Indented to line up with the app's name. -->
+    <LinearLayout
+        android:id="@+id/app_details"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="48dp"
+        android:paddingBottom="14dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/details_summary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.AppWall.Body1"
+            android:textColor="@color/text_secondary" />
+
+        <dev.appwall.SparklineView
+            android:id="@+id/details_chart"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:layout_marginTop="10dp" />
+
+        <TextView
+            android:id="@+id/details_chart_caption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="end"
+            android:importantForAccessibility="no"
+            android:text="@string/details_chart_caption"
+            android:textAppearance="@style/TextAppearance.AppWall.Label" />
+
+        <TextView
+            android:id="@+id/details_destinations"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textAppearance="@style/TextAppearance.AppWall.Mono.Small" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <TextView
-                android:id="@+id/app_label"
+            <!-- Outlined, not solid: the solid button is kept for a screen's one main action. -->
+            <Button
+                android:id="@+id/details_primary"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textAppearance="@style/TextAppearance.AppWall.Body2" />
+                android:layout_height="44dp"
+                android:background="@drawable/bg_outline"
+                android:focusable="false"
+                android:minWidth="88dp"
+                android:paddingHorizontal="16dp"
+                android:stateListAnimator="@null"
+                android:textAppearance="@style/TextAppearance.AppWall.Button"
+                android:textColor="@color/text" />
 
-            <!-- "BLOCKED" tag, in search results only -->
-            <TextView
-                android:id="@+id/app_state"
+            <Button
+                android:id="@+id/details_log"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="@string/state_blocked"
-                android:textAppearance="@style/TextAppearance.AppWall.Label"
-                android:textColor="@color/blocked" />
+                android:layout_height="44dp"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/bg_text_button"
+                android:focusable="false"
+                android:paddingHorizontal="16dp"
+                android:stateListAnimator="@null"
+                android:text="@string/details_full_log"
+                android:textAppearance="@style/TextAppearance.AppWall.Button"
+                android:textColor="@color/text_secondary" />
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/app_package"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:ellipsize="middle"
-            android:maxLines="1"
-            android:textAppearance="@style/TextAppearance.AppWall.Mono.Small" />
     </LinearLayout>
-
-    <dev.appwall.MeterView
-        android:id="@+id/app_meter"
-        android:layout_width="56dp"
-        android:layout_height="4dp"
-        android:layout_marginStart="12dp" />
-
-    <TextView
-        android:id="@+id/app_count"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
-        android:gravity="end"
-        android:minWidth="28dp"
-        android:textAppearance="@style/TextAppearance.AppWall.Mono" />
-
-    <!-- The only thing in a row that changes a rule. Not focusable, so the row stays tappable. -->
-    <Button
-        android:id="@+id/app_action"
-        style="?android:attr/borderlessButtonStyle"
-        android:layout_width="wrap_content"
-        android:layout_height="44dp"
-        android:layout_marginStart="8dp"
-        android:focusable="false"
-        android:minWidth="64dp"
-        android:textColor="@color/accent" />
 </LinearLayout>

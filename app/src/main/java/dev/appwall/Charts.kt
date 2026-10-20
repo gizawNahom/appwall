@@ -10,11 +10,13 @@ import android.text.style.MetricAffectingSpan
 import android.util.AttributeSet
 import android.view.View
 
-/** Small bar chart: one bar per value, oldest first; the newest bar is drawn in the accent color. */
+/**
+ * Small bar chart: one bar per value, oldest first; the newest bar is drawn in the accent color.
+ * Bars share the view's width evenly, so the same chart works as a tiny sparkline or a wide one.
+ */
 class SparklineView(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
 
     private val density = resources.displayMetrics.density
-    private val barWidth = 5 * density
     private val gap = 3 * density
     private val radius = 2 * density
     private val minHeight = 2 * density
@@ -29,9 +31,10 @@ class SparklineView(context: Context, attrs: AttributeSet? = null) : View(contex
         }
 
     override fun onDraw(canvas: Canvas) {
+        if (values.isEmpty()) return
         val max = (values.maxOrNull() ?: 0).coerceAtLeast(1)
-        // Right-aligned, so the newest bar always sits at the right edge.
-        var x = width - values.size * barWidth - (values.size - 1).coerceAtLeast(0) * gap
+        val barWidth = (width - gap * (values.size - 1)) / values.size
+        var x = 0f
         values.forEachIndexed { i, v ->
             val h = (height * v.toFloat() / max).coerceAtLeast(minHeight)
             rect.set(x, height - h, x + barWidth, height.toFloat())

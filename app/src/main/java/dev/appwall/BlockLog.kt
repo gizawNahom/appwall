@@ -134,14 +134,17 @@ class BlockLog private constructor(context: Context) : SQLiteOpenHelper(context,
 
     /**
      * Attempts in [buckets] consecutive windows of [bucketMs] starting at [since], oldest first
-     * (for sparklines). A merged row counts in the window of its latest attempt.
+     * (for sparklines), for one app or (null) all of them. A merged row counts in the window of
+     * its latest attempt.
      */
     @Synchronized
-    fun attemptsPerBucket(since: Long, bucketMs: Long, buckets: Int): IntArray {
+    fun attemptsPerBucket(since: Long, bucketMs: Long, buckets: Int, packageName: String? = null): IntArray {
         val result = IntArray(buckets)
+        val forApp = if (packageName != null) " AND package = ?" else ""
+        val args = listOfNotNull(since.toString(), bucketMs.toString(), since.toString(), packageName).toTypedArray()
         readableDatabase.rawQuery(
-            "SELECT (time - ?) / ?, SUM(attempts) FROM log WHERE time >= ? GROUP BY 1",
-            arrayOf(since.toString(), bucketMs.toString(), since.toString()),
+            "SELECT (time - ?) / ?, SUM(attempts) FROM log WHERE time >= ?$forApp GROUP BY 1",
+            args,
         ).use { c ->
             while (c.moveToNext()) {
                 val bucket = c.getInt(0)
@@ -151,12 +154,31 @@ class BlockLog private constructor(context: Context) : SQLiteOpenHelper(context,
         return result
     }
 
-    /** When the most recent blocked attempt happened, or null if the log is empty. */
+    /** When the most recent blocked attempt happened (by one app, or any), or null if none is logged. */
     @Synchronized
-    fun lastAttemptTime(): Long? =
-        readableDatabase.rawQuery("SELECT MAX(time) FROM log", null).use { c ->
+    fun lastAttemptTime(packageName: String? = null): Long? {
+        val (where, args) = if (packageName != null) " WHERE package = ?" to arrayOf(packageName) else "" to null
+        return readableDatabase.rawQuery("SELECT MAX(time) FROM log$where", args).use { c ->
             if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
         }
+    }
+
+    /**
+     * Where one app tried to go since [since], most attempted first: domain names where known,
+     * otherwise addresses. Returns the top [limit] and the total number of distinct destinations.
+     */
+    @Synchronized
+    fun topDestinations(packageName: String, since: Long, limit: Int): Pair<List<String>, Int> {
+        readableDatabase.rawQuery(
+            "SELECT COALESCE(host, address), SUM(attempts) FROM log WHERE package = ? AND time >= ? " +
+                "GROUP BY 1 ORDER BY 2 DESC",
+            arrayOf(packageName, since.toString()),
+        ).use { c ->
+            val top = ArrayList<String>(limit)
+            while (c.moveToNext() && top.size < limit) top += c.getString(0)
+            return top to c.count
+        }
+    }
 
     /** Deletes entries older than the retention period, e.g. right after it was shortened. */
     @Synchronized
