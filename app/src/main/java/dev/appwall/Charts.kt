@@ -5,7 +5,10 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.text.SpannableString
+import android.text.Spanned
 import android.text.TextPaint
+import android.text.style.ForegroundColorSpan
 import android.text.style.MetricAffectingSpan
 import android.util.AttributeSet
 import android.view.View
@@ -76,5 +79,17 @@ class FontSpan(private val typeface: Typeface) : MetricAffectingSpan() {
 
     override fun updateMeasureState(paint: TextPaint) {
         paint.typeface = typeface
+    }
+
+    companion object {
+        /** "Blocked  5": a segment label with its count in Geist Mono, secondary color. */
+        fun labelWithCount(context: Context, label: String, count: Int): CharSequence {
+            val text = "$label  $count"
+            val start = label.length + 2
+            return SpannableString(text).apply {
+                setSpan(FontSpan(context.resources.getFont(R.font.geist_mono)), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                setSpan(ForegroundColorSpan(context.getColor(R.color.text_secondary)), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
     }
 }

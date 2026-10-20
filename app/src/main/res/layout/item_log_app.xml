@@ -1,24 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One app in the grouped log: icon, name, totals; tap to expand its attempts. -->
+<!-- One app in the log: name, tries and places over the retention period, last try. Opens its log. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:gravity="center_vertical"
-    android:minHeight="64dp"
+    android:minHeight="60dp"
     android:orientation="horizontal"
-    android:paddingHorizontal="16dp"
-    android:paddingVertical="8dp">
+    android:paddingHorizontal="4dp">
 
     <ImageView
         android:id="@+id/log_app_icon"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
         android:importantForAccessibility="no" />
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
+        android:layout_marginStart="12dp"
         android:layout_weight="1"
         android:orientation="vertical">
 
@@ -28,25 +27,30 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textAppearance="@style/TextAppearance.AppWall.Subhead" />
+            android:textAppearance="@style/TextAppearance.AppWall.Body2" />
 
         <TextView
             android:id="@+id/log_app_summary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textAppearance="@style/TextAppearance.AppWall.Body1" />
-
-        <TextView
-            android:id="@+id/log_app_time"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textAppearance="@style/TextAppearance.AppWall.Caption" />
+            android:layout_marginTop="2dp"
+            android:maxLines="1"
+            android:textAppearance="@style/TextAppearance.AppWall.Mono.Small" />
     </LinearLayout>
 
     <TextView
-        android:id="@+id/log_app_chevron"
+        android:id="@+id/log_app_time"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:textAppearance="@style/TextAppearance.AppWall.Mono"
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp" />
+
+    <ImageView
+        android:layout_width="16dp"
+        android:layout_height="16dp"
+        android:layout_marginStart="8dp"
         android:importantForAccessibility="no"
-        android:textAppearance="@style/TextAppearance.AppWall.Caption" />
+        android:src="@drawable/ic_chevron" />
 </LinearLayout>

@@ -268,7 +268,7 @@ class MainActivity : Activity() {
         val wasBlocked = rules.isBlocked(app.packageName)
         when (action) {
             AppListAdapter.Action.FULL_LOG -> {
-                startActivity(Intent(this, LogActivity::class.java).putExtra(LogActivity.EXTRA_PACKAGE, app.packageName))
+                startActivity(AppLogActivity.intent(this, app.packageName))
                 return
             }
             AppListAdapter.Action.TOGGLE -> rules.setBlocked(app.packageName, !wasBlocked)
@@ -459,15 +459,8 @@ class MainActivity : Activity() {
     }
 
     /** "Blocked 5", with the count in Geist Mono, secondary color. */
-    private fun tabLabel(label: Int, count: Int?): CharSequence {
-        val name = getString(label)
-        if (count == null) return name
-        val text = "$name  $count"
-        return SpannableString(text).apply {
-            setSpan(FontSpan(resources.getFont(R.font.geist_mono)), name.length + 2, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            setSpan(android.text.style.ForegroundColorSpan(getColor(R.color.text_secondary)), name.length + 2, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-    }
+    private fun tabLabel(label: Int, count: Int?): CharSequence =
+        if (count == null) getString(label) else FontSpan.labelWithCount(this, getString(label), count)
 
     companion object {
         /** Package name of a just-installed app to ask about; set by the "New app" notification. */

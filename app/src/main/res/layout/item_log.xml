@@ -1,41 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One attempt under an expanded app in the grouped log; indented to sit under the app's name. -->
+<!-- One timeline entry: time, where, port (or DNS for a name lookup), and how many tries it folds. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:gravity="center_vertical"
-    android:minHeight="40dp"
+    android:minHeight="44dp"
     android:orientation="horizontal"
-    android:paddingStart="72dp"
-    android:paddingEnd="16dp"
-    android:paddingVertical="4dp">
+    android:paddingHorizontal="4dp">
+
+    <TextView
+        android:id="@+id/log_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minWidth="44dp"
+        android:textAppearance="@style/TextAppearance.AppWall.Mono"
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp" />
 
     <TextView
         android:id="@+id/log_target"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
         android:layout_weight="1"
         android:ellipsize="middle"
         android:maxLines="1"
-        android:textAppearance="@style/TextAppearance.AppWall.Body1" />
+        android:textAppearance="@style/TextAppearance.AppWall.Mono"
+        android:textSize="13sp" />
 
-    <LinearLayout
+    <TextView
+        android:id="@+id/log_port"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
+        android:layout_marginStart="12dp"
         android:gravity="end"
-        android:orientation="vertical">
+        android:minWidth="40dp"
+        android:textAppearance="@style/TextAppearance.AppWall.Mono"
+        android:textColor="@color/text_secondary"
+        android:textSize="13sp" />
 
-        <TextView
-            android:id="@+id/log_time"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="@style/TextAppearance.AppWall.Caption" />
-
-        <TextView
-            android:id="@+id/log_attempts"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textAppearance="@style/TextAppearance.AppWall.Caption" />
-    </LinearLayout>
+    <TextView
+        android:id="@+id/log_attempts"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:minWidth="44dp"
+        android:textAppearance="@style/TextAppearance.AppWall.Mono"
+        android:textSize="13sp" />
 </LinearLayout>

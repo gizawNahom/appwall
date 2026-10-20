@@ -1,6 +1,8 @@
 package dev.appwall
 
 import android.content.Context
+import android.text.format.DateFormat
+import java.util.Date
 
 /** Short time phrases used across the home screen. */
 object TimeText {
@@ -15,4 +17,11 @@ object TimeText {
             else -> context.getString(R.string.ago_days, minutes / (24 * 60))
         }
     }
+
+    /** "2m ago", or "just now" (where [shortAgo]'s "now ago" would read oddly). */
+    fun ago(context: Context, time: Long, now: Long = System.currentTimeMillis()): String =
+        if (now - time < 60_000) context.getString(R.string.ago_just_now) else context.getString(R.string.ago_suffix, shortAgo(context, time, now))
+
+    /** Clock time in the user's 12/24-hour format, e.g. "19:17" or "7:17 PM". */
+    fun clock(context: Context, time: Long): String = DateFormat.getTimeFormat(context).format(Date(time))
 }

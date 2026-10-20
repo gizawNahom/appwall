@@ -1,34 +1,30 @@
 package dev.appwall
 
 import android.app.Activity
+import android.app.AlertDialog
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.text.format.DateUtils
 import android.view.View
 import android.view.ViewGroup
-import android.widget.BaseExpandableListAdapter
-import android.widget.ExpandableListView
+import android.widget.BaseAdapter
 import android.widget.ImageView
+import android.widget.ListView
 import android.widget.TextView
+import java.util.Calendar
 
 /**
- * Blocked connection attempts grouped by app, most recently active app first. Tap an app to
- * expand its individual attempts. Refreshes live while open.
+ * Blocked traffic, all apps: a summary of the tries over the retention period, then one row per
+ * app, most recently active first. Tapping an app opens its own log. Refreshes live while open.
  */
 class LogActivity : Activity() {
 
     private lateinit var log: BlockLog
+    private lateinit var rules: Rules
     private lateinit var icons: AppIcons
-    private lateinit var list: ExpandableListView
-    private lateinit var empty: View
-    private val adapter = GroupedAdapter()
-    private val labels = HashMap<String, String>()
-
-    /** Expanded apps, by package (null = unattributed), so expansion survives live refreshes. */
-    private val expanded = HashSet<String?>()
-    private var scrollToPackage: String? = null
+    private val adapter = AppsAdapter()
 
     private val handler = Handler(Looper.getMainLooper())
     private val refresher = object : Runnable {
@@ -42,32 +38,24 @@ class LogActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_log)
         log = BlockLog.get(this)
+        rules = Rules(this)
         icons = AppIcons(this)
-        empty = findViewById(R.id.log_empty)
-        list = findViewById(R.id.log_list)
-        list.setAdapter(adapter)
-        list.setOnGroupExpandListener { expanded += adapter.groups[it].packageName }
-        list.setOnGroupCollapseListener { expanded -= adapter.groups[it].packageName }
-        findViewById<View>(R.id.log_clear).setOnClickListener {
-            log.clear()
-            reload()
-        }
 
-        // Opened from a long-press on the wall: start with that app expanded.
-        intent.getStringExtra(EXTRA_PACKAGE)?.let {
-            expanded += it
-            scrollToPackage = it
+        findViewById<View>(R.id.log_back).setOnClickListener { finish() }
+        findViewById<View>(R.id.log_clear).setOnClickListener { confirmClear() }
+        val openSettings = View.OnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
+        findViewById<View>(R.id.log_footer).setOnClickListener(openSettings)
+        findViewById<View>(R.id.log_open_settings).setOnClickListener(openSettings)
+        findViewById<ListView>(R.id.log_list).apply {
+            adapter = this@LogActivity.adapter
+            setOnItemClickListener { _, _, position, _ ->
+                startActivity(AppLogActivity.intent(this@LogActivity, this@LogActivity.adapter.getItem(position).packageName))
+            }
         }
     }
 
     override fun onResume() {
         super.onResume()
-        val rules = Rules(this)
-        findViewById<TextView>(R.id.log_subtitle).text = if (rules.loggingEnabled) {
-            resources.getQuantityString(R.plurals.log_subtitle, rules.logRetentionDays, rules.logRetentionDays)
-        } else {
-            getString(R.string.log_subtitle_off)
-        }
         handler.post(refresher)
     }
 
@@ -76,94 +64,102 @@ class LogActivity : Activity() {
         super.onPause()
     }
 
+    private fun confirmClear() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.log_clear_title)
+            .setMessage(R.string.log_clear_text)
+            .setPositiveButton(R.string.log_clear) { _, _ ->
+                log.clear()
+                reload()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     private fun reload() {
-        val byApp = log.entries(limit = 2000).groupBy { it.packageName }
-        adapter.groups = log.summaries()
-        adapter.children = adapter.groups.map { byApp[it.packageName].orEmpty().take(MAX_ENTRIES_PER_APP) }
+        val days = rules.logRetentionDays
+        val now = System.currentTimeMillis()
+        adapter.apps = log.summaries()
         adapter.notifyDataSetChanged()
 
-        // Group positions shift as apps reorder, so re-apply expansion by package.
-        adapter.groups.forEachIndexed { position, group ->
-            if (group.packageName in expanded) list.expandGroup(position) else list.collapseGroup(position)
+        val hasEntries = adapter.apps.isNotEmpty()
+        listOf(R.id.log_summary, R.id.log_columns, R.id.log_list, R.id.log_clear).forEach {
+            findViewById<View>(it).visibility = if (hasEntries) View.VISIBLE else View.GONE
         }
-        scrollToPackage?.let { packageName ->
-            val position = adapter.groups.indexOfFirst { it.packageName == packageName }
-            if (position >= 0) list.setSelectedGroup(position)
-            scrollToPackage = null
+        findViewById<View>(R.id.log_empty).visibility = if (hasEntries) View.GONE else View.VISIBLE
+        findViewById<TextView>(R.id.log_footer).text = if (rules.loggingEnabled) {
+            resources.getQuantityString(R.plurals.log_footer, days, days)
+        } else {
+            getString(R.string.log_footer_off)
         }
-        empty.visibility = if (adapter.groups.isEmpty()) View.VISIBLE else View.GONE
+        if (!hasEntries) {
+            val off = !rules.loggingEnabled
+            findViewById<TextView>(R.id.log_empty_title).setText(if (off) R.string.log_off_title else R.string.log_empty_title)
+            findViewById<TextView>(R.id.log_empty_body).setText(if (off) R.string.log_off_body else R.string.log_empty_body)
+            findViewById<View>(R.id.log_open_settings).visibility = if (off) View.VISIBLE else View.GONE
+            return
+        }
+
+        findViewById<TextView>(R.id.log_today).text = log.attemptsSince(startOfToday()).values.sum().toString()
+        findViewById<TextView>(R.id.log_period).text = adapter.apps.sumOf { it.attempts }.toString()
+        findViewById<TextView>(R.id.log_period_label).text = resources.getQuantityString(R.plurals.log_stat_period, days, days)
+        findViewById<TextView>(R.id.log_apps).text = adapter.apps.size.toString()
+        findViewById<TextView>(R.id.log_column_app).text = resources.getQuantityString(R.plurals.log_column_app, days, days)
+        findViewById<SparklineView>(R.id.log_chart).apply {
+            values = log.attemptsPerBucket(now - DAY_MS, HOUR_MS, 24)
+            contentDescription = getString(R.string.log_chart_description, values.sum())
+        }
     }
 
-    private fun labelFor(packageName: String?): String {
-        if (packageName == null) return getString(R.string.unknown_app)
-        return labels.getOrPut(packageName) {
-            try {
-                packageManager.getApplicationInfo(packageName, 0).loadLabel(packageManager).toString()
-            } catch (e: PackageManager.NameNotFoundException) {
-                packageName // uninstalled since
-            }
-        }
-    }
+    private fun startOfToday(): Long = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 
-    private fun timeAgo(time: Long): CharSequence =
-        DateUtils.getRelativeTimeSpanString(time, System.currentTimeMillis(), DateUtils.SECOND_IN_MILLIS)
+    private inner class AppsAdapter : BaseAdapter() {
+        var apps: List<AppSummary> = emptyList()
+        private val labels = HashMap<String, String>()
 
-    private inner class GroupedAdapter : BaseExpandableListAdapter() {
-        var groups: List<AppSummary> = emptyList()
-        var children: List<List<LogEntry>> = emptyList()
+        override fun getCount() = apps.size
+        override fun getItem(position: Int) = apps[position]
+        override fun getItemId(position: Int) = position.toLong()
 
-        override fun getGroupCount() = groups.size
-        override fun getChildrenCount(groupPosition: Int) = children[groupPosition].size
-        override fun getGroup(groupPosition: Int) = groups[groupPosition]
-        override fun getChild(groupPosition: Int, childPosition: Int) = children[groupPosition][childPosition]
-        override fun getGroupId(groupPosition: Int) = groupPosition.toLong()
-        override fun getChildId(groupPosition: Int, childPosition: Int) = childPosition.toLong()
-        override fun hasStableIds() = false
-        override fun isChildSelectable(groupPosition: Int, childPosition: Int) = false
-
-        override fun getGroupView(groupPosition: Int, isExpanded: Boolean, convertView: View?, parent: ViewGroup): View {
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
             val view = convertView ?: layoutInflater.inflate(R.layout.item_log_app, parent, false)
-            val group = groups[groupPosition]
-            view.findViewById<ImageView>(R.id.log_app_icon).setImageDrawable(group.packageName?.let { icons[it] })
-            view.findViewById<TextView>(R.id.log_app_name).text = labelFor(group.packageName)
+            val app = apps[position]
+            val label = labelFor(app.packageName)
+            val ago = TimeText.shortAgo(this@LogActivity, app.lastTime)
+            view.findViewById<ImageView>(R.id.log_app_icon).setImageDrawable(app.packageName?.let { icons[it] })
+            view.findViewById<TextView>(R.id.log_app_name).text = label
             view.findViewById<TextView>(R.id.log_app_summary).text = getString(
                 R.string.log_app_summary,
-                resources.getQuantityString(R.plurals.log_attempt_count, group.attempts, group.attempts),
-                resources.getQuantityString(R.plurals.log_destination_count, group.destinations, group.destinations),
+                resources.getQuantityString(R.plurals.log_tries, app.attempts, app.attempts),
+                resources.getQuantityString(R.plurals.log_places, app.destinations, app.destinations),
             )
-            view.findViewById<TextView>(R.id.log_app_time).text = timeAgo(group.lastTime)
-            view.findViewById<TextView>(R.id.log_app_chevron).text = if (isExpanded) "▲" else "▼"
+            view.findViewById<TextView>(R.id.log_app_time).text = ago
+            view.contentDescription = resources.getQuantityString(R.plurals.log_app_description, app.attempts, label, app.attempts, ago)
             return view
         }
 
-        override fun getChildView(
-            groupPosition: Int, childPosition: Int, isLastChild: Boolean, convertView: View?, parent: ViewGroup,
-        ): View {
-            val view = convertView ?: layoutInflater.inflate(R.layout.item_log, parent, false)
-            val entry = children[groupPosition][childPosition]
-            view.findViewById<TextView>(R.id.log_target).text = describeTarget(entry)
-            view.findViewById<TextView>(R.id.log_time).text = timeAgo(entry.time)
-            view.findViewById<TextView>(R.id.log_attempts).apply {
-                text = getString(R.string.log_attempts, entry.attempts)
-                visibility = if (entry.attempts > 1) View.VISIBLE else View.GONE
-            }
-            return view
-        }
-
-        private fun describeTarget(entry: LogEntry): String {
-            val protocol = PacketParser.protocolName(entry.protocol)
-            return when {
-                entry.host != null -> getString(R.string.log_dns_lookup, entry.host)
-                entry.port != 0 -> getString(R.string.log_address_port, entry.address, entry.port, protocol)
-                else -> getString(R.string.log_address, entry.address, protocol)
-            }
+        private fun labelFor(packageName: String?): String {
+            if (packageName == null) return getString(R.string.unknown_app)
+            return labels.getOrPut(packageName) { appLabel(this@LogActivity, packageName) }
         }
     }
 
     companion object {
-        /** Package to show expanded when the log opens (from a long-press on the wall). */
-        const val EXTRA_PACKAGE = "dev.appwall.LOG_PACKAGE"
         private const val REFRESH_MS = 2000L
-        private const val MAX_ENTRIES_PER_APP = 200
+        private const val HOUR_MS = 60 * 60 * 1000L
+        private const val DAY_MS = 24 * HOUR_MS
+
+        /** An app's name, or its package if it has been uninstalled since. */
+        fun appLabel(activity: Activity, packageName: String): String = try {
+            val pm = activity.packageManager
+            pm.getApplicationInfo(packageName, 0).loadLabel(pm).toString()
+        } catch (e: PackageManager.NameNotFoundException) {
+            packageName
+        }
     }
 }

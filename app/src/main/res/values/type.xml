@@ -65,6 +65,12 @@
         <item name="android:textColor">@color/text</item>
     </style>
 
+    <!-- Stat numbers in the log's summary card. -->
+    <style name="TextAppearance.AppWall.Mono.Large" parent="TextAppearance.AppWall.Mono">
+        <item name="android:textSize">22sp</item>
+        <item name="android:letterSpacing">-0.02</item>
+    </style>
+
     <style name="TextAppearance.AppWall.Mono.Small" parent="TextAppearance.AppWall.Mono">
         <item name="android:textSize">12sp</item>
         <item name="android:textColor">@color/text_secondary</item>

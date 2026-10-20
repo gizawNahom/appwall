@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One place an app tried to reach: name or address, ports and last try, and how many tries. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:minHeight="56dp"
+    android:orientation="horizontal"
+    android:paddingHorizontal="4dp"
+    android:paddingVertical="8dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/dest_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="middle"
+            android:maxLines="1"
+            android:textAppearance="@style/TextAppearance.AppWall.Mono"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/dest_meta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:maxLines="1"
+            android:textAppearance="@style/TextAppearance.AppWall.Caption" />
+    </LinearLayout>
+
+    <dev.appwall.MeterView
+        android:id="@+id/dest_meter"
+        android:layout_width="48dp"
+        android:layout_height="4dp"
+        android:layout_marginStart="12dp" />
+
+    <TextView
+        android:id="@+id/dest_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:gravity="end"
+        android:minWidth="32dp"
+        android:textAppearance="@style/TextAppearance.AppWall.Mono" />
+</LinearLayout>

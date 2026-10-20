@@ -23,6 +23,16 @@ data class AppSummary(
     val lastTime: Long,
 )
 
+/** One place an app tried to reach: a domain name it looked up, or an address it connected to. */
+data class Destination(
+    val name: String,
+    /** Only a name lookup was seen (the app never got an address to connect to). */
+    val isLookup: Boolean,
+    val ports: List<Int>,
+    val attempts: Int,
+    val lastTime: Long,
+)
+
 /**
  * On-device log of blocked connection attempts. Apps retry a lot, so repeats of the same attempt
  * within a minute are folded into one row with an attempt count. Entries expire after the
@@ -102,12 +112,54 @@ class BlockLog private constructor(context: Context) : SQLiteOpenHelper(context,
         }
     }
 
+    /** One app's entries (null = the unattributed ones), newest first. */
+    @Synchronized
+    fun entriesFor(packageName: String?, limit: Int = 500): List<LogEntry> {
+        val (forApp, appArgs) = appFilter(packageName)
+        val since = System.currentTimeMillis() - retentionMs()
+        readableDatabase.query(
+            "log", arrayOf("time", "protocol", "address", "port", "host", "attempts"),
+            "$forApp AND time >= ?", appArgs + since.toString(), null, null, "time DESC", limit.toString(),
+        ).use { c ->
+            val result = ArrayList<LogEntry>(c.count)
+            while (c.moveToNext()) {
+                result += LogEntry(c.getLong(0), packageName, c.getInt(1), c.getString(2), c.getInt(3), c.getString(4), c.getInt(5))
+            }
+            return result
+        }
+    }
+
+    /** Where one app (null = unattributed) tried to go over the retention period, most tried first. */
+    @Synchronized
+    fun destinations(packageName: String?): List<Destination> {
+        val (forApp, appArgs) = appFilter(packageName)
+        val since = System.currentTimeMillis() - retentionMs()
+        readableDatabase.rawQuery(
+            "SELECT COALESCE(host, address), host IS NOT NULL, GROUP_CONCAT(DISTINCT port), SUM(attempts), MAX(time) " +
+                "FROM log WHERE $forApp AND time >= ? GROUP BY 1, 2 ORDER BY 4 DESC",
+            appArgs + since.toString(),
+        ).use { c ->
+            val result = ArrayList<Destination>(c.count)
+            while (c.moveToNext()) {
+                val isLookup = c.getInt(1) != 0
+                // A lookup's port is always DNS's, which says nothing about the app.
+                val ports = if (isLookup) emptyList() else c.getString(2).split(',').mapNotNull { it.toIntOrNull() }.filter { it != 0 }.sorted()
+                result += Destination(c.getString(0), isLookup, ports, c.getInt(3), c.getLong(4))
+            }
+            return result
+        }
+    }
+
+    /** SQL matching one app's rows; `package = ?` can't match the unattributed (null) ones. */
+    private fun appFilter(packageName: String?): Pair<String, Array<String>> =
+        if (packageName == null) "package IS NULL" to emptyArray() else "package = ?" to arrayOf(packageName)
+
     /** One row per app, most recently active first. */
     @Synchronized
     fun summaries(): List<AppSummary> {
         val since = System.currentTimeMillis() - retentionMs()
         readableDatabase.rawQuery(
-            "SELECT package, SUM(attempts), COUNT(DISTINCT COALESCE(host, address || ':' || port)), MAX(time) " +
+            "SELECT package, SUM(attempts), COUNT(DISTINCT COALESCE(host, address)), MAX(time) " +
                 "FROM log WHERE time >= ? GROUP BY package ORDER BY MAX(time) DESC",
             arrayOf(since.toString()),
         ).use { c ->

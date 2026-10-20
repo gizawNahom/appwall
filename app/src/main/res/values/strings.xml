@@ -143,28 +143,74 @@
     <string name="new_app_dialog_title">%1$s was just installed</string>
     <string name="new_app_dialog_text">It can access the internet. Block it?</string>
     <string name="log_title">Blocked traffic</string>
-    <plurals name="log_subtitle">
-        <item quantity="one">Connection attempts by blocked apps, last %d day</item>
-        <item quantity="other">Connection attempts by blocked apps, last %d days</item>
-    </plurals>
-    <string name="log_subtitle_off">Logging is off. Turn it on in Settings.</string>
     <string name="log_clear">Clear</string>
-    <string name="log_empty">Nothing blocked yet. When a blocked app tries to connect, it shows up here.</string>
+    <string name="log_clear_title">Clear the log?</string>
+    <string name="log_clear_text">This deletes every logged try. It can\'t be undone.</string>
+    <string name="log_stat_today">Tries today</string>
+    <plurals name="log_stat_period">
+        <item quantity="one">Last %d day</item>
+        <item quantity="other">Last %d days</item>
+    </plurals>
+    <string name="log_stat_apps">Apps</string>
+    <string name="chart_24h_ago">24h ago</string>
+    <string name="chart_12h">12h</string>
+    <string name="chart_now">now</string>
+    <string name="log_chart_description">Blocked tries per hour over the last 24 hours, all apps, %d in total</string>
+    <plurals name="log_column_app">
+        <item quantity="one">APP · %d DAY</item>
+        <item quantity="other">APP · %d DAYS</item>
+    </plurals>
+    <string name="column_last">LAST</string>
+    <string name="column_tries">TRIES</string>
+    <plurals name="log_footer">
+        <item quantity="one">KEPT %d DAY · CHANGE IN SETTINGS</item>
+        <item quantity="other">KEPT %d DAYS · CHANGE IN SETTINGS</item>
+    </plurals>
+    <string name="log_footer_off">LOGGING IS OFF · CHANGE IN SETTINGS</string>
+    <string name="log_empty_title">Nothing blocked yet</string>
+    <string name="log_empty_body">When a blocked app tries to connect, it shows up here: which app, where it tried to go, and when.</string>
+    <string name="log_off_title">Logging is off</string>
+    <string name="log_off_body">Blocked apps are still blocked. AppWall just isn\'t keeping a record of their tries.</string>
+    <string name="log_open_settings">Open Settings</string>
     <!-- Only blocked apps' traffic enters the tunnel, but for lookups Android does on an app's behalf it can't say which. -->
     <string name="unknown_app">A blocked app</string>
-    <string name="log_dns_lookup">Looked up %1$s</string>
-    <string name="log_address_port">%1$s:%2$d · %3$s</string>
-    <string name="log_address">%1$s · %2$s</string>
-    <string name="log_attempts">×%1$d</string>
     <string name="log_app_summary">%1$s · %2$s</string>
-    <plurals name="log_attempt_count">
-        <item quantity="one">%d attempt</item>
-        <item quantity="other">%d attempts</item>
+    <plurals name="log_tries">
+        <item quantity="one">%d try</item>
+        <item quantity="other">%d tries</item>
     </plurals>
-    <plurals name="log_destination_count">
-        <item quantity="one">%d destination</item>
-        <item quantity="other">%d destinations</item>
+    <plurals name="log_places">
+        <item quantity="one">%d place</item>
+        <item quantity="other">%d places</item>
     </plurals>
+    <plurals name="log_app_description">
+        <item quantity="one">%1$s, %2$d try, last %3$s. Opens its log.</item>
+        <item quantity="other">%1$s, %2$d tries, last %3$s. Opens its log.</item>
+    </plurals>
+    <string name="log_tab_timeline">Timeline</string>
+    <string name="log_tab_destinations">Destinations</string>
+    <plurals name="dest_column">
+        <item quantity="one">WHERE IT TRIED · %d DAY</item>
+        <item quantity="other">WHERE IT TRIED · %d DAYS</item>
+    </plurals>
+    <string name="dest_lookup">Name lookup · %1$s</string>
+    <string name="dest_ports">Port %1$s · %2$s</string>
+    <string name="dest_no_port">%1$s</string>
+    <string name="log_port_dns">DNS</string>
+    <string name="log_attempts">×%1$d</string>
+    <string name="log_today">TODAY</string>
+    <string name="log_yesterday">YESTERDAY</string>
+    <plurals name="log_day_total">
+        <item quantity="one">%d TRY</item>
+        <item quantity="other">%d TRIES</item>
+    </plurals>
+    <string name="state_allowed">ALLOWED</string>
+    <string name="app_log_allow">Allow %1$s</string>
+    <string name="app_log_block">Block %1$s</string>
+    <string name="app_log_empty">Nothing logged for this app.</string>
+    <string name="ago_just_now">just now</string>
+    <string name="ago_suffix">%1$s ago</string>
+    <string name="back">Back</string>
     <string name="status_on_none">On — no apps blocked yet. Tap an app to block it.</string>
     <plurals name="status_on">
         <item quantity="one">On — blocking %d app</item>
