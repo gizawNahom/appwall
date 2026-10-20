@@ -1,4 +1,6 @@
-package dev.appwall
+package dev.appwall.core.log
+
+import dev.appwall.core.net.Packet
 
 /**
  * Turns the packets blocked apps send into "tries": one per connection, not one per packet.

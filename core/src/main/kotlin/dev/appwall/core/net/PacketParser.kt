@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.core.net
 
 import java.net.InetAddress
 
@@ -74,7 +74,8 @@ object PacketParser {
         if (length < start + 12 || u16(b, start + 4) == 0) return null // no room, or no questions
         val labels = mutableListOf<String>()
         var i = start + 12
-        while (i < length) {
+        while (true) {
+            if (i >= length) return null // truncated before the name's end, so not the real name
             val labelLength = b[i].toInt() and 0xFF
             if (labelLength == 0) break
             if (labelLength and 0xC0 != 0 || i + 1 + labelLength > length) return null // compressed or truncated

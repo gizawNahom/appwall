@@ -8,6 +8,7 @@ import android.widget.BaseAdapter
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
+import dev.appwall.core.apps.AppEntry
 
 /**
  * The home list. On the Blocked tab: blocked apps, busiest first, with today's attempts. On the

@@ -23,6 +23,7 @@ import android.widget.ImageView
 import android.widget.ListView
 import android.widget.Switch
 import android.widget.TextView
+import dev.appwall.core.apps.AppEntry
 import java.util.Calendar
 
 class MainActivity : Activity() {

@@ -14,6 +14,7 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.ListView
 import android.widget.TextView
+import dev.appwall.core.apps.AppEntry
 
 /**
  * "Block an app": pick any number of allowed apps and block them together. Returns the chosen

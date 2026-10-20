@@ -14,6 +14,9 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.ListView
 import android.widget.TextView
+import dev.appwall.core.log.Destination
+import dev.appwall.core.log.LogEntry
+import dev.appwall.core.net.PacketParser
 import java.util.Calendar
 
 /**

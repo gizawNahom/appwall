@@ -13,6 +13,7 @@ import android.widget.BaseAdapter
 import android.widget.ImageView
 import android.widget.ListView
 import android.widget.TextView
+import dev.appwall.core.log.AppSummary
 import java.util.Calendar
 
 /**
