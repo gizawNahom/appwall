@@ -57,7 +57,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         rules = Rules(this)
-        log = BlockLog.get(this)
+        log = appWall.log
         icons = AppIcons(this)
 
         findViewById<View>(R.id.open_settings).setOnClickListener {
@@ -170,16 +170,13 @@ class MainActivity : Activity() {
 
     private fun loadApps() {
         val sequence = packageManager.getChangedPackages(0)?.sequenceNumber ?: 0
-        Thread {
-            val loaded = InstalledApps.load(this)
-            runOnUiThread {
-                adapter.setApps(loaded)
-                packagesSequence = sequence
-                if (!appsLoaded) revealList()
-                appsLoaded = true
-                refreshState()
-            }
-        }.start()
+        appWall.apps.load { loaded ->
+            adapter.setApps(loaded)
+            packagesSequence = sequence
+            if (!appsLoaded) revealList()
+            appsLoaded = true
+            refreshState()
+        }
     }
 
     /** Asks the user for VPN permission the first time, then starts the firewall. */

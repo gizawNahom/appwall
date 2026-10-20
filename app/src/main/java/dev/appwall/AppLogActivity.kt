@@ -45,7 +45,7 @@ class AppLogActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_app_log)
-        log = BlockLog.get(this)
+        log = appWall.log
         rules = Rules(this)
         packageName = intent.getStringExtra(EXTRA_PACKAGE)
         showTimeline = savedInstanceState?.getBoolean(STATE_TIMELINE) ?: false

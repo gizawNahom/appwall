@@ -38,7 +38,7 @@ class LogActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_log)
-        log = BlockLog.get(this)
+        log = appWall.log
         rules = Rules(this)
         icons = AppIcons(this)
 

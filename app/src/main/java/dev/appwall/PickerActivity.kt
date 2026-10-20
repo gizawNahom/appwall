@@ -72,18 +72,15 @@ class PickerActivity : Activity() {
         updateConfirm()
 
         // Usually the home screen loaded the list moments ago; only load when it hasn't.
-        val cached = InstalledApps.cached
-        if (cached != null) {
-            setApps(cached)
+        val latest = appWall.apps.latest
+        if (latest != null) {
+            setApps(latest)
         } else {
             findViewById<View>(R.id.loading).visibility = View.VISIBLE
-            Thread {
-                val loaded = InstalledApps.load(this)
-                runOnUiThread {
-                    findViewById<View>(R.id.loading).visibility = View.GONE
-                    setApps(loaded)
-                }
-            }.start()
+            appWall.apps.load { loaded ->
+                findViewById<View>(R.id.loading).visibility = View.GONE
+                setApps(loaded)
+            }
         }
     }
 

@@ -34,7 +34,7 @@ class TunnelReader(
 
     private val appContext = context.applicationContext
     private val rules = Rules(appContext)
-    private val log = BlockLog.get(appContext)
+    private val log = appContext.appWall.log
     private val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
     private val tries = TryTracker(::ownerOf) { owner, packet ->
         // A failed log write must never reach the reading loop.

@@ -19,6 +19,16 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    fun sharedObjectsComeFromTheApplication() {
+        // Step 4: no process-wide singletons; AppWallApplication builds and hands them out.
+        val forbidden = listOf("BlockLog.get(", "InstalledApps.", "object InstalledApps")
+        val offenders = sources.flatMap { file ->
+            file.readLines().filter { line -> forbidden.any { it in line } }.map { "${file.name}: ${it.trim()}" }
+        }
+        assertEquals(emptyList<String>(), offenders)
+    }
+
+    @Test
     fun sourcesWereFound() {
         // Guards the rules above against passing vacuously if the source path is wrong.
         assertEquals(true, sources.any { it.name == "MainActivity.kt" })

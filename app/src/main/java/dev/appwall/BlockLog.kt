@@ -15,7 +15,7 @@ import dev.appwall.core.net.Packet
  * of tries stays spread across the hours it happened in. Entries expire after the
  * user's chosen retention period (7 days by default).
  */
-class BlockLog private constructor(context: Context) : SQLiteOpenHelper(context, "blocklog.db", null, 1) {
+class BlockLog(context: Context) : SQLiteOpenHelper(context, "blocklog.db", null, 1) {
 
     private val rules = Rules(context)
 
@@ -226,12 +226,5 @@ class BlockLog private constructor(context: Context) : SQLiteOpenHelper(context,
     companion object {
         private const val MERGE_WINDOW_MS = 60_000L
         private const val DAY_MS = 24 * 60 * 60 * 1000L
-
-        @Volatile private var instance: BlockLog? = null
-
-        fun get(context: Context): BlockLog =
-            instance ?: synchronized(this) {
-                instance ?: BlockLog(context.applicationContext).also { instance = it }
-            }
     }
 }
