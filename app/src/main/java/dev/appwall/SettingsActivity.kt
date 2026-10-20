@@ -12,6 +12,7 @@ import android.widget.RadioGroup
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import dev.appwall.core.firewall.NewAppMode
 
 class SettingsActivity : Activity() {
 

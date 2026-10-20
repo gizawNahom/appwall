@@ -8,10 +8,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.Build
 import android.os.Handler
@@ -19,6 +19,9 @@ import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.util.Log
+import dev.appwall.core.firewall.DNS_SERVER
+import dev.appwall.core.firewall.TunnelPlan
+import dev.appwall.core.firewall.tunnelPlan
 
 /**
  * Blocks apps by routing only the blocked ones into a local tunnel that is read only for logging
@@ -87,18 +90,21 @@ class FirewallVpnService : VpnService() {
             // log show the domain names they tried to reach. Nothing ever answers.
             .addDnsServer(DNS_SERVER)
 
+        val plan = tunnelPlan(Rules(this).blocked(), ::isInstalled)
         var routed = 0
-        for (packageName in Rules(this).blocked()) {
-            try {
-                builder.addAllowedApplication(packageName)
-                routed++
-            } catch (e: PackageManager.NameNotFoundException) {
-                Log.w(TAG, "Blocked app no longer installed: $packageName")
+        if (plan is TunnelPlan.Route) {
+            for (packageName in plan.packages) {
+                try {
+                    builder.addAllowedApplication(packageName)
+                    routed++
+                } catch (e: PackageManager.NameNotFoundException) {
+                    Log.w(TAG, "Blocked app uninstalled just now: $packageName")
+                }
             }
         }
 
-        // An allow-list with no apps would route EVERY app into the tunnel, so with nothing
-        // to block we must not establish a tunnel at all.
+        // See TunnelPlan.NoTunnel: an empty allow-list would route EVERY app into the tunnel.
+        // (Also checked after building, in case a planned app was uninstalled meanwhile.)
         if (routed == 0) {
             closeTunnel()
             showStatus(0)
@@ -118,6 +124,14 @@ class FirewallVpnService : VpnService() {
         reader?.shutdown()
         startReader(newTunnel)
         showStatus(routed)
+    }
+
+    private fun isInstalled(packageName: String): Boolean = try {
+        packageManager.getApplicationInfo(packageName, 0)
+        true
+    } catch (e: PackageManager.NameNotFoundException) {
+        Log.w(TAG, "Blocked app no longer installed: $packageName")
+        false
     }
 
     private fun startReader(tunnel: ParcelFileDescriptor) {
@@ -270,8 +284,6 @@ class FirewallVpnService : VpnService() {
             return AlwaysOnStatus(service.isAlwaysOn, service.isLockdownEnabled)
         }
 
-        /** Fake DNS server inside the tunnel; see [applyRules]. */
-        const val DNS_SERVER = "10.111.0.2"
         const val ACTION_APPLY = "dev.appwall.APPLY"
         const val ACTION_STOP = "dev.appwall.STOP"
         const val ACTION_BLOCK_NEW_APP = "dev.appwall.BLOCK_NEW_APP"

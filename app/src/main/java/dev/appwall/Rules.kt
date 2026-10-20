@@ -1,9 +1,7 @@
 package dev.appwall
 
 import android.content.Context
-
-/** What to do when a new app that uses the internet is installed. */
-enum class NewAppMode { ASK, ALLOW, BLOCK }
+import dev.appwall.core.firewall.NewAppMode
 
 /** Settings persisted on the device: on/off state, the set of blocked packages, and user preferences. */
 class Rules(context: Context) {

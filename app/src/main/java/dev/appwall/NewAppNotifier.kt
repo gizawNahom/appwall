@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import dev.appwall.core.firewall.NewAppDecision
+import dev.appwall.core.firewall.newAppDecision
 
 /**
  * Handles freshly installed apps according to [NewAppMode]: asks "Block it? [Block] [Allow]",
@@ -26,18 +28,22 @@ object NewAppNotifier {
     /** Returns true if the block rules changed (the app was blocked automatically). */
     fun onInstalled(context: Context, packageName: String): Boolean {
         val rules = Rules(context)
-        val mode = rules.newAppMode
-        if (mode == NewAppMode.ALLOW || packageName == context.packageName || rules.isBlocked(packageName)) return false
         val pm = context.packageManager
         val info = try {
             pm.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS)
         } catch (e: PackageManager.NameNotFoundException) {
-            return false
+            null
         }
-        if (info.requestedPermissions?.contains(Manifest.permission.INTERNET) != true) return false
-        val label = info.applicationInfo?.loadLabel(pm)?.toString() ?: packageName
+        val decision = newAppDecision(
+            mode = rules.newAppMode,
+            isSelf = packageName == context.packageName,
+            alreadyBlocked = rules.isBlocked(packageName),
+            usesInternet = info?.let { it.requestedPermissions?.contains(Manifest.permission.INTERNET) == true },
+        )
+        if (decision == NewAppDecision.IGNORE) return false
+        val label = info?.applicationInfo?.loadLabel(pm)?.toString() ?: packageName
 
-        if (mode == NewAppMode.BLOCK) {
+        if (decision == NewAppDecision.AUTO_BLOCK) {
             rules.setBlocked(packageName, true)
             post(
                 context, packageName,

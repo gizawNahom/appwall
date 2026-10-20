@@ -9,6 +9,8 @@ import android.system.Os
 import android.system.OsConstants
 import android.system.StructPollfd
 import android.util.Log
+import dev.appwall.core.firewall.pickOwner
+import dev.appwall.core.firewall.shouldCount
 import dev.appwall.core.log.TryTracker
 import dev.appwall.core.net.Packet
 import dev.appwall.core.net.PacketParser
@@ -125,38 +127,29 @@ class TunnelReader(
     private fun record(buffer: ByteArray, length: Int) {
         if (!rules.loggingEnabled) return
         val packet = PacketParser.parse(buffer, length) ?: return
-        // IPv6 housekeeping (router solicitations etc.) comes from the system, not from an app.
-        if (packet.protocol == PacketParser.ICMPV6) return
-        // Android probing our fake DNS server for Private DNS (DNS-over-TLS); also not an app.
-        if (packet.destinationPort == 853 && packet.destination.hostAddress == FirewallVpnService.DNS_SERVER) return
-        // Android can only name the app for TCP and UDP; anything else is attributable only
-        // when a single app is blocked.
-        if (packet.protocol != PacketParser.TCP && packet.protocol != PacketParser.UDP && rules.blocked().size != 1) return
+        if (!shouldCount(packet, rules.blocked().size)) return
         tries.onPacket(packet, System.currentTimeMillis())
     }
 
     /** Which blocked app sent this packet, or null if Android can't tell us. */
-    private fun ownerOf(packet: Packet): String? {
-        val blocked = rules.blocked()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-            (packet.protocol == PacketParser.TCP || packet.protocol == PacketParser.UDP)
-        ) {
-            try {
-                val uid = connectivity.getConnectionOwnerUid(
-                    packet.protocol,
-                    InetSocketAddress(packet.source, packet.sourcePort),
-                    InetSocketAddress(packet.destination, packet.destinationPort),
-                )
-                val packages = appContext.packageManager.getPackagesForUid(uid)
-                if (packages != null) return packages.firstOrNull { it in blocked } ?: packages.first()
-            } catch (e: SecurityException) {
-                // We're not the active VPN any more; fall through.
-            } catch (e: IllegalArgumentException) {
-                // Unsupported address/protocol combination; fall through.
-            }
+    private fun ownerOf(packet: Packet): String? = pickOwner(ownerPackages(packet), rules.blocked())
+
+    /** The packages Android says own the packet's connection, or null if it can't say. */
+    private fun ownerPackages(packet: Packet): List<String>? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        if (packet.protocol != PacketParser.TCP && packet.protocol != PacketParser.UDP) return null
+        return try {
+            val uid = connectivity.getConnectionOwnerUid(
+                packet.protocol,
+                InetSocketAddress(packet.source, packet.sourcePort),
+                InetSocketAddress(packet.destination, packet.destinationPort),
+            )
+            appContext.packageManager.getPackagesForUid(uid)?.toList()
+        } catch (e: SecurityException) {
+            null // We're not the active VPN any more.
+        } catch (e: IllegalArgumentException) {
+            null // Unsupported address/protocol combination.
         }
-        // With a single blocked app, every packet in the tunnel must be its.
-        return blocked.singleOrNull()
     }
 
     private companion object {
