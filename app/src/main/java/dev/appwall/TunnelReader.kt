@@ -14,21 +14,46 @@ import java.net.InetSocketAddress
 
 /**
  * Reads what blocked apps send into the tunnel and records it in the [BlockLog]. Nothing is ever
- * forwarded, so the apps stay blocked. Owns the tunnel: closes it once [shutdown] is called.
+ * forwarded, so the apps stay blocked.
+ *
+ * The tunnel must stay up whatever goes wrong here: closing it would give blocked apps their
+ * network back. So a packet that fails to parse or log is skipped, and the tunnel is closed only
+ * after a deliberate [shutdown]. If reading itself fails, the tunnel is left open and
+ * [onUnexpectedStop] lets the service decide what to do with it.
  */
-class TunnelReader(context: Context, private val tunnel: ParcelFileDescriptor) : Thread("TunnelReader") {
+class TunnelReader(
+    context: Context,
+    val tunnel: ParcelFileDescriptor,
+    private val onUnexpectedStop: (TunnelReader) -> Unit,
+) : Thread("TunnelReader") {
 
     private val appContext = context.applicationContext
     private val rules = Rules(appContext)
     private val log = BlockLog.get(appContext)
     private val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
-    private val tries = TryTracker(::ownerOf) { owner, packet -> log.record(owner, packet) }
+    private val tries = TryTracker(::ownerOf) { owner, packet ->
+        // A failed log write must never reach the reading loop.
+        try {
+            log.record(owner, packet)
+        } catch (e: Exception) {
+            packetFailed(e)
+        }
+    }
 
     @Volatile private var stopped = false
+    private var failedPackets = 0
+
+    /** Whoever comes second, [shutdown] or the loop ending, closes the tunnel; see [closeIfDone]. */
+    private val closeLock = Any()
+    private var exited = false
+    private var closed = false
 
     /** Stops reading and closes the tunnel within about a second. */
     fun shutdown() {
-        stopped = true
+        synchronized(closeLock) {
+            stopped = true
+            closeIfDone()
+        }
     }
 
     override fun run() {
@@ -42,24 +67,56 @@ class TunnelReader(context: Context, private val tunnel: ParcelFileDescriptor) :
             while (!stopped) {
                 // Wake up at least once a second to notice shutdown() and settle pending tries.
                 if (Os.poll(arrayOf(poll), 1000) == 0) {
-                    tries.sweep(System.currentTimeMillis())
+                    contained { tries.sweep(System.currentTimeMillis()) }
                     continue
                 }
-                if (poll.revents.toInt() and (OsConstants.POLLERR or OsConstants.POLLHUP or OsConstants.POLLNVAL) != 0) break
+                if (poll.revents.toInt() and (OsConstants.POLLERR or OsConstants.POLLHUP or OsConstants.POLLNVAL) != 0) {
+                    if (!stopped) Log.w(TAG, "Tunnel reported an error or hang-up")
+                    break
+                }
                 val length = try {
                     Os.read(fd, buffer, 0, buffer.size)
                 } catch (e: ErrnoException) {
                     if (e.errno == OsConstants.EAGAIN || e.errno == OsConstants.EINTR) continue else throw e
                 }
-                if (length > 0) record(buffer, length)
+                if (length > 0) contained { record(buffer, length) }
             }
-        } catch (e: ErrnoException) {
-            Log.w(TAG, "Tunnel read stopped", e)
-        } catch (e: IOException) {
-            Log.w(TAG, "Tunnel read stopped", e)
+        } catch (e: Throwable) {
+            // Includes Errors: an uncaught one would crash the app and drop the tunnel.
+            if (!stopped) Log.e(TAG, "Tunnel read stopped", e)
         } finally {
-            tunnel.close()
+            val unexpected = synchronized(closeLock) {
+                exited = true
+                closeIfDone()
+                !stopped
+            }
+            if (unexpected) onUnexpectedStop(this)
         }
+    }
+
+    /** Closes the tunnel once both the loop has ended and [shutdown] was called. Holds [closeLock]. */
+    private fun closeIfDone() {
+        if (!exited || !stopped || closed) return
+        closed = true
+        try {
+            tunnel.close()
+        } catch (e: IOException) {
+            Log.w(TAG, "Couldn't close the tunnel", e)
+        }
+    }
+
+    /** Runs one packet's work; a failure skips that packet instead of ending the loop. */
+    private inline fun contained(work: () -> Unit) {
+        try {
+            work()
+        } catch (e: Exception) {
+            packetFailed(e)
+        }
+    }
+
+    private fun packetFailed(e: Exception) {
+        // Logged now and then, not per packet: a broken log could fail on every one.
+        if (failedPackets++ % 100 == 0) Log.w(TAG, "Skipped a packet ($failedPackets so far)", e)
     }
 
     private fun record(buffer: ByteArray, length: Int) {

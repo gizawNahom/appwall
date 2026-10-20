@@ -14,6 +14,10 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.net.VpnService
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.ParcelFileDescriptor
+import android.os.SystemClock
 import android.util.Log
 
 /**
@@ -25,6 +29,10 @@ class FirewallVpnService : VpnService() {
 
     /** Reads (and owns) the current tunnel; null while no tunnel is up. */
     private var reader: TunnelReader? = null
+
+    /** When readers were restarted after dying unexpectedly (elapsed ms), for the per-minute cap. */
+    private val readerRestarts = ArrayDeque<Long>()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     /**
      * Watches for newly installed apps. Android no longer delivers install events to apps that
@@ -108,8 +116,56 @@ class FirewallVpnService : VpnService() {
             return
         }
         reader?.shutdown()
-        reader = TunnelReader(this, newTunnel).also { it.start() }
+        startReader(newTunnel)
         showStatus(routed)
+    }
+
+    private fun startReader(tunnel: ParcelFileDescriptor) {
+        reader = TunnelReader(this, tunnel) { dead -> mainHandler.post { onReaderDied(dead) } }.also { it.start() }
+    }
+
+    /**
+     * The tunnel's reader stopped on its own. The tunnel itself is still up, so blocked apps are
+     * still blocked; a fresh reader takes it over. If readers keep dying, turn the wall off
+     * deliberately and say so, rather than look on while nothing reads the tunnel.
+     */
+    private fun onReaderDied(dead: TunnelReader) {
+        if (reader !== dead) return // already replaced or stopped
+        val now = SystemClock.elapsedRealtime()
+        while (readerRestarts.isNotEmpty() && now - readerRestarts.first() >= RESTART_WINDOW_MS) readerRestarts.removeFirst()
+        if (readerRestarts.size < MAX_RESTARTS) {
+            readerRestarts.addLast(now)
+            Log.w(TAG, "Tunnel reader stopped; restarting it (${readerRestarts.size}/$MAX_RESTARTS this minute)")
+            startReader(dead.tunnel)
+            return
+        }
+        Log.e(TAG, "Tunnel reader keeps stopping; turning the firewall off")
+        Rules(this).enabled = false
+        closeTunnel()
+        showStopped()
+        stopSelf()
+    }
+
+    /** Tells the user the firewall turned itself off after an error, so they know apps are unblocked. */
+    private fun showStopped() {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_PROBLEMS, getString(R.string.channel_problems), NotificationManager.IMPORTANCE_DEFAULT)
+        )
+        val openApp = PendingIntent.getActivity(
+            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
+        )
+        manager.notify(
+            NOTIFICATION_STOPPED_ID,
+            Notification.Builder(this, CHANNEL_PROBLEMS)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(getString(R.string.stopped_title))
+                .setContentText(getString(R.string.stopped_text))
+                .setStyle(Notification.BigTextStyle().bigText(getString(R.string.stopped_text)))
+                .setContentIntent(openApp)
+                .setAutoCancel(true)
+                .build(),
+        )
     }
 
     /**
@@ -223,5 +279,10 @@ class FirewallVpnService : VpnService() {
         private const val TAG = "AppWall"
         private const val CHANNEL_STATUS = "status"
         private const val NOTIFICATION_ID = 1
+        private const val CHANNEL_PROBLEMS = "problems"
+        private const val NOTIFICATION_STOPPED_ID = 3 // 2 is NewAppNotifier's (tagged per app)
+        /** At most this many reader restarts per [RESTART_WINDOW_MS] before giving up. */
+        private const val MAX_RESTARTS = 3
+        private const val RESTART_WINDOW_MS = 60_000L
     }
 }

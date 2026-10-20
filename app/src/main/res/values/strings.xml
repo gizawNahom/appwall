@@ -4,6 +4,9 @@
     <string name="firewall_switch">Firewall on/off</string>
     <string name="search_hint">Search apps</string>
     <string name="channel_status">Firewall status</string>
+    <string name="channel_problems">Problems</string>
+    <string name="stopped_title">AppWall turned itself off</string>
+    <string name="stopped_text">The firewall hit an error it couldn\'t recover from, so blocked apps can use the internet again. Open AppWall to turn it back on.</string>
     <!-- Home -->
     <string name="wall_up">Wall up</string>
     <string name="wall_down">Off</string>
