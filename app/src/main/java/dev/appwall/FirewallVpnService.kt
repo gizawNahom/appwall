@@ -16,12 +16,12 @@ import android.net.VpnService
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.util.Log
 import dev.appwall.core.firewall.DNS_SERVER
 import dev.appwall.core.firewall.TunnelPlan
 import dev.appwall.core.firewall.tunnelPlan
+import dev.appwall.core.tunnel.TunnelSession
 
 /**
  * Blocks apps by routing only the blocked ones into a local tunnel that is read only for logging
@@ -30,11 +30,14 @@ import dev.appwall.core.firewall.tunnelPlan
  */
 class FirewallVpnService : VpnService() {
 
-    /** Reads (and owns) the current tunnel; null while no tunnel is up. */
-    private var reader: TunnelReader? = null
+    /**
+     * Reads the tunnel for as long as this service runs, through every rule change, and is the
+     * only thing that closes a tunnel once handed one.
+     */
+    private lateinit var session: TunnelSession
 
-    /** When readers were restarted after dying unexpectedly (elapsed ms), for the per-minute cap. */
-    private val readerRestarts = ArrayDeque<Long>()
+    /** When the session was restarted after stopping unexpectedly (elapsed ms), for the per-minute cap. */
+    private val sessionRestarts = ArrayDeque<Long>()
     private val mainHandler = Handler(Looper.getMainLooper())
 
     /**
@@ -52,6 +55,20 @@ class FirewallVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         running = this
+        val log = appWall.log
+        val rules = Rules(this)
+        session = TunnelSession(
+            owners = ConnectivityOwners(this),
+            loggingEnabled = { rules.loggingEnabled },
+            onTry = { owner, packet -> log.record(owner, packet) },
+            onFailure = { error ->
+                Log.e(TAG, "Tunnel session stopped", error)
+                mainHandler.post(::onSessionFailed)
+            },
+            // Logged now and then, not per packet: a broken log could fail on every one.
+            onSkipped = { count, error -> if (count % 100 == 1) Log.w(TAG, "Skipped a packet ($count so far)", error) },
+        )
+        session.start()
         val filter = IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply { addDataScheme("package") }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(installReceiver, filter, RECEIVER_NOT_EXPORTED)
@@ -90,7 +107,9 @@ class FirewallVpnService : VpnService() {
             // log show the domain names they tried to reach. Nothing ever answers.
             .addDnsServer(DNS_SERVER)
 
-        val plan = tunnelPlan(Rules(this).blocked(), ::isInstalled)
+        val blocked = Rules(this).blocked()
+        session.blocked = blocked
+        val plan = tunnelPlan(blocked, ::isInstalled)
         var routed = 0
         if (plan is TunnelPlan.Route) {
             for (packageName in plan.packages) {
@@ -121,8 +140,8 @@ class FirewallVpnService : VpnService() {
             stopSelf()
             return
         }
-        reader?.shutdown()
-        startReader(newTunnel)
+        // The new tunnel is already up, so blocked apps are never left without one.
+        session.switchTo(VpnTunnel(newTunnel))
         showStatus(routed)
     }
 
@@ -134,26 +153,21 @@ class FirewallVpnService : VpnService() {
         false
     }
 
-    private fun startReader(tunnel: ParcelFileDescriptor) {
-        reader = TunnelReader(this, tunnel) { dead -> mainHandler.post { onReaderDied(dead) } }.also { it.start() }
-    }
-
     /**
-     * The tunnel's reader stopped on its own. The tunnel itself is still up, so blocked apps are
-     * still blocked; a fresh reader takes it over. If readers keep dying, turn the wall off
-     * deliberately and say so, rather than look on while nothing reads the tunnel.
+     * The session's loop stopped on its own. The tunnel is still up, so blocked apps are still
+     * blocked; the loop restarts on it. If it keeps stopping, turn the wall off deliberately and
+     * say so, rather than look on while nothing reads the tunnel.
      */
-    private fun onReaderDied(dead: TunnelReader) {
-        if (reader !== dead) return // already replaced or stopped
+    private fun onSessionFailed() {
         val now = SystemClock.elapsedRealtime()
-        while (readerRestarts.isNotEmpty() && now - readerRestarts.first() >= RESTART_WINDOW_MS) readerRestarts.removeFirst()
-        if (readerRestarts.size < MAX_RESTARTS) {
-            readerRestarts.addLast(now)
-            Log.w(TAG, "Tunnel reader stopped; restarting it (${readerRestarts.size}/$MAX_RESTARTS this minute)")
-            startReader(dead.tunnel)
+        while (sessionRestarts.isNotEmpty() && now - sessionRestarts.first() >= RESTART_WINDOW_MS) sessionRestarts.removeFirst()
+        if (sessionRestarts.size < MAX_RESTARTS) {
+            sessionRestarts.addLast(now)
+            Log.w(TAG, "Restarting the tunnel session (${sessionRestarts.size}/$MAX_RESTARTS this minute)")
+            session.start()
             return
         }
-        Log.e(TAG, "Tunnel reader keeps stopping; turning the firewall off")
+        Log.e(TAG, "Tunnel session keeps stopping; turning the firewall off")
         Rules(this).enabled = false
         closeTunnel()
         showStopped()
@@ -248,14 +262,14 @@ class FirewallVpnService : VpnService() {
     override fun onDestroy() {
         running = null
         unregisterReceiver(installReceiver)
-        closeTunnel()
+        session.shutdown() // closes the tunnel and ends the session's thread
         hideStatus()
         super.onDestroy()
     }
 
+    /** No tunnel: the session closes the current one at its next turn and waits for another. */
     private fun closeTunnel() {
-        reader?.shutdown()
-        reader = null
+        session.switchTo(null)
     }
 
     /** Live Always-on state, as only the running VPN service can ask Android for it. */
