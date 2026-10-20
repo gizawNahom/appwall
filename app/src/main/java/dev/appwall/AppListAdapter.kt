@@ -22,7 +22,7 @@ class AppListAdapter(
     private val context: Context,
     private val rules: Rules,
     private val icons: AppIcons,
-    private val log: BlockLog,
+    private val log: SqlBlockLog,
     private val onAction: (AppEntry, Action) -> Unit,
 ) : BaseAdapter() {
 

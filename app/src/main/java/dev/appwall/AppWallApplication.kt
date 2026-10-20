@@ -20,7 +20,7 @@ import java.util.concurrent.Executors
 class AppWallApplication : Application() {
 
     /** The blocked traffic log. Opening the database waits for the first query. */
-    lateinit var log: BlockLog
+    lateinit var log: SqlBlockLog
         private set
 
     /** Installed apps, loaded off the UI thread and remembered between screens. */
@@ -33,7 +33,8 @@ class AppWallApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        log = BlockLog(this)
+        val rules = Rules(this)
+        log = SqlBlockLog(AndroidSqlDb(this, SqlBlockLog.FILE, SqlBlockLog.VERSION, SqlBlockLog::create), { rules.logRetentionDays })
         apps = InstalledAppsRepository(this, namedExecutor("appwall-apps"))
         firewallStatus = FirewallStatusBoard(ChangeSignal(MainThreadScheduler))
     }

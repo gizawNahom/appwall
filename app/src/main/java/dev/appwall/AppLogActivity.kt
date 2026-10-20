@@ -26,7 +26,7 @@ import java.util.Calendar
  */
 class AppLogActivity : Activity() {
 
-    private lateinit var log: BlockLog
+    private lateinit var log: SqlBlockLog
     private lateinit var rules: Rules
     /** Null for traffic AppWall couldn't attribute to an app. */
     private var packageName: String? = null

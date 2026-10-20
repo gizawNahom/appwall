@@ -32,7 +32,7 @@ import java.util.Calendar
 class MainActivity : Activity() {
 
     private lateinit var rules: Rules
-    private lateinit var log: BlockLog
+    private lateinit var log: SqlBlockLog
     private lateinit var adapter: AppListAdapter
     private lateinit var firewallSwitch: Switch
     private lateinit var icons: AppIcons

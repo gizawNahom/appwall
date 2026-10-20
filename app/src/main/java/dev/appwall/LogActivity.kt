@@ -22,7 +22,7 @@ import java.util.Calendar
  */
 class LogActivity : Activity() {
 
-    private lateinit var log: BlockLog
+    private lateinit var log: SqlBlockLog
     private lateinit var rules: Rules
     private lateinit var icons: AppIcons
     private val adapter = AppsAdapter()

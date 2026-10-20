@@ -15,7 +15,7 @@ class ArchitectureRulesTest {
     @Test
     fun onlyTheLogStorageUsesTheDatabase() {
         val users = sources.filter { file -> file.readLines().any { it.startsWith("import android.database") } }
-        assertEquals(listOf("BlockLog.kt"), users.map { it.name }.sorted())
+        assertEquals(listOf("AndroidSqlDb.kt"), users.map { it.name }.sorted())
     }
 
     @Test

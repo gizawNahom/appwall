@@ -30,4 +30,6 @@ kotlin {
 dependencies {
     implementation(project(":core"))
     testImplementation("junit:junit:4.13.2")
+    // Test-only: real SQLite on the JVM, so the block log's SQL is tested without a phone.
+    testImplementation("org.xerial:sqlite-jdbc:3.46.1.3")
 }
