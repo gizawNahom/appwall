@@ -34,16 +34,17 @@ data class Destination(
 )
 
 /**
- * On-device log of blocked connection attempts. Apps retry a lot, so repeats of the same attempt
- * within a minute are folded into one row with an attempt count. Entries expire after the
+ * On-device log of blocked tries. Repeat tries to the same place within a minute of the row's
+ * first try are folded into that row with a count; later ones start a new row, so a steady stream
+ * of tries stays spread across the hours it happened in. Entries expire after the
  * user's chosen retention period (7 days by default).
  */
 class BlockLog private constructor(context: Context) : SQLiteOpenHelper(context, "blocklog.db", null, 1) {
 
     private val rules = Rules(context)
 
-    /** Recently written rows by attempt key, so retries bump a row instead of adding new ones. */
-    private val recent = HashMap<String, Pair<Long, Long>>() // key -> (row id, last attempt time)
+    /** Recently written rows by attempt key, so repeat tries bump a row instead of adding new ones. */
+    private val recent = HashMap<String, Pair<Long, Long>>() // key -> (row id, row's first try time)
     private var insertsSincePrune = 0
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -66,8 +67,8 @@ class BlockLog private constructor(context: Context) : SQLiteOpenHelper(context,
 
         val previous = recent[key]
         if (previous != null && now - previous.second < MERGE_WINDOW_MS) {
+            // The row keeps its first try's window, so it never absorbs more than a minute.
             db.execSQL("UPDATE log SET attempts = attempts + 1, time = ? WHERE _id = ?", arrayOf(now, previous.first))
-            recent[key] = previous.first to now
             return
         }
 

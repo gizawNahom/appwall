@@ -16,13 +16,16 @@ import android.view.View
 /**
  * Small bar chart: one bar per value, oldest first; the newest bar is drawn in the accent color.
  * Bars share the view's width evenly, so the same chart works as a tiny sparkline or a wide one.
+ * An empty slot is a flat dash; any activity is at least twice as tall, so a big spike can't make
+ * a quiet hour look empty.
  */
 class SparklineView(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
 
     private val density = resources.displayMetrics.density
     private val gap = 3 * density
     private val radius = 2 * density
-    private val minHeight = 2 * density
+    private val emptyHeight = 2 * density
+    private val minActiveHeight = 4 * density
     private val dim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = context.getColor(R.color.spark_dim) }
     private val accent = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = context.getColor(R.color.accent) }
     private val rect = RectF()
@@ -39,7 +42,7 @@ class SparklineView(context: Context, attrs: AttributeSet? = null) : View(contex
         val barWidth = (width - gap * (values.size - 1)) / values.size
         var x = 0f
         values.forEachIndexed { i, v ->
-            val h = (height * v.toFloat() / max).coerceAtLeast(minHeight)
+            val h = if (v == 0) emptyHeight else (height * v.toFloat() / max).coerceAtLeast(minActiveHeight)
             rect.set(x, height - h, x + barWidth, height.toFloat())
             canvas.drawRoundRect(rect, radius, radius, if (i == values.lastIndex) accent else dim)
             x += barWidth + gap
