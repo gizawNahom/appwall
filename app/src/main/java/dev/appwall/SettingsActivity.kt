@@ -1,7 +1,6 @@
 package dev.appwall
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -38,12 +37,14 @@ class SettingsActivity : Activity() {
         // Apps can't turn on Always-on VPN themselves, and Android has no link to one VPN's own
         // page, only to the list of VPNs. So explain the steps first, then open that list.
         findViewById<View>(R.id.always_on).setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle(R.string.always_on_guide_title)
-                .setMessage(R.string.always_on_guide_steps)
-                .setPositiveButton(R.string.always_on_guide_open) { _, _ -> open(Intent(Settings.ACTION_VPN_SETTINGS)) }
-                .setNegativeButton(android.R.string.cancel, null)
-                .show()
+            AppSheet(
+                title = getString(R.string.always_on_guide_title),
+                body = getString(R.string.always_on_guide_steps),
+                choices = listOf(
+                    AppSheet.Choice(getString(android.R.string.cancel), AppSheet.Role.SECONDARY),
+                    AppSheet.Choice(getString(R.string.always_on_guide_open), AppSheet.Role.MAIN) { open(Intent(Settings.ACTION_VPN_SETTINGS)) },
+                ),
+            ).show(this)
         }
 
         // New apps

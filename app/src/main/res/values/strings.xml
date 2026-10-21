@@ -140,6 +140,7 @@
     <string name="repo_url" translatable="false">https://github.com/gizawNahom/appwall</string>
     <string name="repo_url_display" translatable="false">github.com/gizawNahom/appwall</string>
     <string name="license_url" translatable="false">https://www.gnu.org/licenses/gpl-3.0.html</string>
+    <string name="new_app_label">NEW APP</string>
     <string name="new_app_dialog_title">%1$s was just installed</string>
     <string name="new_app_dialog_text">It can access the internet. Block it?</string>
     <string name="log_title">Blocked traffic</string>

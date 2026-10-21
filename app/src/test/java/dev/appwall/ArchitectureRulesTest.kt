@@ -142,6 +142,13 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    fun everyQuestionIsAskedInTheSheet() {
+        // One way to ask something, so every question looks and behaves the same (AppSheet).
+        val dialogs = sources.filter { it.readText().contains("AlertDialog") }
+        assertEquals(emptyList<String>(), dialogs.map { it.name })
+    }
+
+    @Test
     fun sourcesWereFound() {
         // Guards the rules above against passing vacuously if the source path is wrong.
         assertEquals(true, sources.any { it.name == "MainActivity.kt" })

@@ -2,7 +2,6 @@ package dev.appwall
 
 import android.Manifest
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.VpnService
@@ -157,13 +156,15 @@ class MainActivity : Activity() {
             return // uninstalled again before the user got here
         }
         val label = info.loadLabel(packageManager)
-        AlertDialog.Builder(this)
-            .setIcon(icons[packageName])
-            .setTitle(getString(R.string.new_app_dialog_title, label))
-            .setMessage(R.string.new_app_dialog_text)
-            .setPositiveButton(R.string.block) { _, _ -> appWall.firewall.block(listOf(packageName)) }
-            .setNegativeButton(R.string.allow, null)
-            .show()
+        AppSheet(
+            label = getString(R.string.new_app_label),
+            title = getString(R.string.new_app_dialog_title, label),
+            body = getString(R.string.new_app_dialog_text),
+            choices = listOf(
+                AppSheet.Choice(getString(R.string.warn_keep), AppSheet.Role.SECONDARY),
+                AppSheet.Choice(getString(R.string.block), AppSheet.Role.MAIN) { appWall.firewall.block(listOf(packageName)) },
+            ),
+        ).show(this)
     }
 
     override fun onStart() {
@@ -234,14 +235,16 @@ class MainActivity : Activity() {
 
     /** Explains that Android allows one VPN at a time and another app has it. */
     private fun showOtherVpnDialog() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.other_vpn_title)
-            .setMessage(R.string.other_vpn_message)
-            .setPositiveButton(R.string.always_on_guide_open) { _, _ ->
-                startActivity(Intent(android.provider.Settings.ACTION_VPN_SETTINGS))
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        AppSheet(
+            title = getString(R.string.other_vpn_title),
+            body = getString(R.string.other_vpn_message),
+            choices = listOf(
+                AppSheet.Choice(getString(android.R.string.cancel), AppSheet.Role.SECONDARY),
+                AppSheet.Choice(getString(R.string.always_on_guide_open), AppSheet.Role.MAIN) {
+                    startActivity(Intent(android.provider.Settings.ACTION_VPN_SETTINGS))
+                },
+            ),
+        ).show(this)
     }
 
     private fun startFirewall() {

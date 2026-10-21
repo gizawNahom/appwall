@@ -1,7 +1,6 @@
 package dev.appwall
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -73,14 +72,15 @@ class LogActivity : Activity() {
     }
 
     private fun confirmClear() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.log_clear_title)
-            .setMessage(R.string.log_clear_text)
-            .setPositiveButton(R.string.log_clear) { _, _ -> onDb({ it.clear() }) {} }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-            // Deleting the log can't be undone: coral, like every destructive action.
-            .getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(getColor(R.color.blocked))
+        // Deleting the log can't be undone: coral, like every destructive action.
+        AppSheet(
+            title = getString(R.string.log_clear_title),
+            body = getString(R.string.log_clear_text),
+            choices = listOf(
+                AppSheet.Choice(getString(android.R.string.cancel), AppSheet.Role.SECONDARY),
+                AppSheet.Choice(getString(R.string.log_clear), AppSheet.Role.RISKY) { onDb({ it.clear() }) {} },
+            ),
+        ).show(this)
     }
 
     private fun render(state: LogState) {
