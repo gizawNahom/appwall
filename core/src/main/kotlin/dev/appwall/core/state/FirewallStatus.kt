@@ -32,6 +32,12 @@ sealed interface FirewallState {
     data class On(val routedApps: Int) : FirewallState
 }
 
+/**
+ * How well tries can be put down to apps. Android 8 and 9 can't say which app a connection came
+ * from, so there only a single blocked app's tries are attributed; the rest show as unknown.
+ */
+enum class Attribution { FULL, LIMITED }
+
 /** Android's Always-on VPN setting for AppWall, which only the running service can read. */
 enum class AlwaysOn { UNKNOWN, OFF, ON, LOCKDOWN }
 
@@ -41,6 +47,7 @@ data class FirewallStatus(
     /** Blocked tries the log had no room for (they were still blocked), since the app started. */
     val droppedTries: Long = 0,
     val logHealth: LogHealth = LogHealth.Checking,
+    val attribution: Attribution = Attribution.FULL,
 ) {
     val running: Boolean get() = firewall !is FirewallState.Off
 }
@@ -56,17 +63,21 @@ class FirewallStatusBoard(val changed: ChangeSignal) {
         private set
 
     /** The service's view of the firewall; the dropped-tries count and log health are kept, not replaced. */
-    fun publish(status: FirewallStatus) = update { status.copy(droppedTries = it.droppedTries, logHealth = it.logHealth) }
+    fun publish(status: FirewallStatus) =
+        update { status.copy(droppedTries = it.droppedTries, logHealth = it.logHealth, attribution = it.attribution) }
 
     /** The service stopped: off for [reason], unless it already said why. Always-on is unknown again. */
     fun stopped(reason: OffReason) = update { current ->
         val firewall = current.firewall
         val keep = firewall is FirewallState.Off && firewall.reason != OffReason.NOT_RUNNING
-        FirewallStatus(if (keep) firewall else FirewallState.Off(reason), AlwaysOn.UNKNOWN, current.droppedTries, current.logHealth)
+        current.copy(firewall = if (keep) firewall else FirewallState.Off(reason), alwaysOn = AlwaysOn.UNKNOWN)
     }
 
     /** From the database thread: [total] tries dropped so far for want of room in the log's queue. */
     fun countDropped(total: Long) = update { it.copy(droppedTries = total) }
+
+    /** From the service: how well this phone lets tries be put down to apps. */
+    fun setAttribution(attribution: Attribution) = update { it.copy(attribution = attribution) }
 
     /** From the start-up checks: whether the block log can be used. */
     fun setLogHealth(health: LogHealth) = update { it.copy(logHealth = health) }

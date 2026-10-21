@@ -6,6 +6,13 @@
     <string name="channel_status">Firewall status</string>
     <string name="channel_problems">Problems</string>
     <string name="stopped_title">AppWall turned itself off</string>
+    <string name="status_off_settings">Off: settings unreadable</string>
+    <string name="notice_log_unavailable">Log unavailable. Apps are still blocked, but tries aren\'t recorded.</string>
+    <plurals name="notice_dropped">
+        <item quantity="one">%d try wasn\'t logged (still blocked)</item>
+        <item quantity="other">%d tries weren\'t logged (still blocked)</item>
+    </plurals>
+    <string name="notice_limited">This Android version can\'t always tell which app a try came from.</string>
     <string name="settings_unreadable_title">AppWall can\'t read its settings</string>
     <string name="settings_unreadable_text">Its list of blocked apps may be damaged, so the firewall stays off rather than block the wrong apps. Clearing AppWall\'s storage in Android settings fixes this, but you\'ll need to choose your blocked apps again.</string>
     <string name="stopped_text">The firewall hit an error it couldn\'t recover from, so blocked apps can use the internet again. Open AppWall to turn it back on.</string>

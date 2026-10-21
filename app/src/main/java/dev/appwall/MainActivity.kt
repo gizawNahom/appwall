@@ -29,6 +29,7 @@ import dev.appwall.core.screens.CardLine
 import dev.appwall.core.screens.Headline
 import dev.appwall.core.screens.HomeEmpty
 import dev.appwall.core.screens.HomeLogStats
+import dev.appwall.core.screens.HomeNotice
 import dev.appwall.core.screens.HomeTab
 import dev.appwall.core.screens.homeState
 import dev.appwall.core.screens.startOfDay
@@ -447,7 +448,21 @@ class MainActivity : Activity() {
             CardLine.Failed -> getString(R.string.status_off_failed)
             CardLine.Revoked -> getString(R.string.status_off_revoked)
             CardLine.NoPermission -> getString(R.string.status_off_no_permission)
+            CardLine.SettingsUnreadable -> getString(R.string.status_off_settings)
             is CardLine.TurnOnToBlock -> resources.getQuantityString(R.plurals.turn_on_to_block, line.apps, line.apps)
+        }
+        findViewById<TextView>(R.id.health_notice).apply {
+            visibility = if (state.notices.isEmpty()) View.GONE else View.VISIBLE
+            text = state.notices.joinToString(" · ") { notice ->
+                when (notice) {
+                    HomeNotice.LogUnavailable -> getString(R.string.notice_log_unavailable)
+                    is HomeNotice.DroppedTries ->
+                        resources.getQuantityString(R.plurals.notice_dropped, notice.count.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), notice.count)
+                    HomeNotice.LimitedAttribution -> getString(R.string.notice_limited)
+                }
+            }
+            // Coral only for a real problem; the others are just worth knowing.
+            setTextColor(getColor(if (HomeNotice.LogUnavailable in state.notices) R.color.blocked else R.color.text_secondary))
         }
         findViewById<SparklineView>(R.id.sparkline).apply {
             values = state.sparkline.toIntArray()

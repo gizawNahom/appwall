@@ -2,8 +2,10 @@ package dev.appwall.core.screens
 
 import dev.appwall.core.apps.AppEntry
 import dev.appwall.core.settings.FirewallPolicy
+import dev.appwall.core.state.Attribution
 import dev.appwall.core.state.FirewallState
 import dev.appwall.core.state.FirewallStatus
+import dev.appwall.core.state.LogHealth
 import dev.appwall.core.state.OffReason
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -80,6 +82,7 @@ class HomeStateTest {
             Triple(FirewallStatus(FirewallState.Off(OffReason.TUNNEL_FAILED)), false, CardLine.Failed to Headline.Down),
             Triple(FirewallStatus(FirewallState.Off(OffReason.REVOKED)), false, CardLine.Revoked to Headline.Down),
             Triple(FirewallStatus(FirewallState.Off(OffReason.NO_PERMISSION)), false, CardLine.NoPermission to Headline.Down),
+            Triple(FirewallStatus(FirewallState.Off(OffReason.SETTINGS_UNREADABLE)), false, CardLine.SettingsUnreadable to Headline.Down),
             Triple(FirewallStatus(FirewallState.Off(OffReason.TURNED_OFF)), false, CardLine.TurnOnToBlock(4) to Headline.Down),
         )
         for ((status, otherVpn, expected) in table) {
@@ -87,6 +90,18 @@ class HomeStateTest {
             assertEquals("$status, other VPN $otherVpn", expected, s.cardLine to s.headline)
         }
         assertEquals(Headline.NothingBlocked, state(blocked = emptySet()).headline)
+    }
+
+    @Test
+    fun healthNotices() {
+        assertEquals(emptyList<HomeNotice>(), state(status = on.copy(logHealth = LogHealth.Ok)).notices)
+        assertEquals(emptyList<HomeNotice>(), state(status = on.copy(logHealth = LogHealth.Checking)).notices)
+        assertEquals(listOf(HomeNotice.LogUnavailable), state(status = on.copy(logHealth = LogHealth.Unavailable("disk full"))).notices)
+        assertEquals(listOf(HomeNotice.DroppedTries(12)), state(status = on.copy(droppedTries = 12)).notices)
+        assertEquals(listOf(HomeNotice.LimitedAttribution), state(status = on.copy(attribution = Attribution.LIMITED)).notices)
+        // Attribution only matters while blocking; a broken log matters always.
+        val off = FirewallStatus(FirewallState.Off(OffReason.TURNED_OFF), logHealth = LogHealth.Unavailable("x"), attribution = Attribution.LIMITED)
+        assertEquals(listOf(HomeNotice.LogUnavailable), state(status = off).notices)
     }
 
     @Test

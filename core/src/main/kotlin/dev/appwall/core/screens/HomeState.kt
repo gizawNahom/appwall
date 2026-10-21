@@ -2,8 +2,10 @@ package dev.appwall.core.screens
 
 import dev.appwall.core.apps.AppEntry
 import dev.appwall.core.settings.FirewallPolicy
+import dev.appwall.core.state.Attribution
 import dev.appwall.core.state.FirewallState
 import dev.appwall.core.state.FirewallStatus
+import dev.appwall.core.state.LogHealth
 import dev.appwall.core.state.OffReason
 
 /** BLOCKED and ALLOWED are the tabs; SEARCH replaces both while searching. */
@@ -31,7 +33,18 @@ sealed interface CardLine {
     data object Failed : CardLine
     data object Revoked : CardLine
     data object NoPermission : CardLine
+    data object SettingsUnreadable : CardLine
     data class TurnOnToBlock(val apps: Int) : CardLine
+}
+
+/** Something about the firewall's health worth knowing, shown under the card's numbers. */
+sealed interface HomeNotice {
+    /** The log failed its start-up check: blocking works, but nothing is recorded. A problem. */
+    data object LogUnavailable : HomeNotice
+    /** Tries the log had no room for (they were still blocked). */
+    data class DroppedTries(val count: Long) : HomeNotice
+    /** Android 8–9: only a single blocked app's tries can be put down to it. */
+    data object LimitedAttribution : HomeNotice
 }
 
 /** Why the list is empty, if it is (and the apps have loaded). */
@@ -98,6 +111,7 @@ data class HomeState(
     val meterMax: Int,
     val loading: Boolean,
     val empty: HomeEmpty,
+    val notices: List<HomeNotice> = emptyList(),
 )
 
 /**
@@ -150,6 +164,7 @@ fun homeState(
         firewall.reason == OffReason.TUNNEL_FAILED -> CardLine.Failed
         firewall.reason == OffReason.REVOKED -> CardLine.Revoked
         firewall.reason == OffReason.NO_PERMISSION -> CardLine.NoPermission
+        firewall.reason == OffReason.SETTINGS_UNREADABLE -> CardLine.SettingsUnreadable
         else -> CardLine.TurnOnToBlock(blockedCount)
     }
     return HomeState(
@@ -176,6 +191,11 @@ fun homeState(
             tab == HomeTab.BLOCKED -> HomeEmpty.NO_BLOCKED
             else -> HomeEmpty.NO_ALLOWED
         },
+        notices = listOfNotNull(
+            HomeNotice.LogUnavailable.takeIf { status.logHealth is LogHealth.Unavailable },
+            HomeNotice.DroppedTries(status.droppedTries).takeIf { status.droppedTries > 0 },
+            HomeNotice.LimitedAttribution.takeIf { running && status.attribution == Attribution.LIMITED },
+        ),
     )
 }
 

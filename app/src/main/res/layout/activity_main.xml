@@ -176,6 +176,16 @@
                     android:layout_height="24dp"
                     android:layout_marginStart="12dp" />
             </LinearLayout>
+
+            <!-- Health worth knowing: log unavailable, dropped tries, limited attribution. -->
+            <TextView
+                android:id="@+id/health_notice"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textAppearance="@style/TextAppearance.AppWall.Body2"
+                android:textColor="@color/text_secondary"
+                android:visibility="gone" />
         </LinearLayout>
 
         <View

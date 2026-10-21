@@ -90,6 +90,9 @@ class ArchitectureRulesTest {
         assertTrue(Probed::class.java.isAssignableFrom(SqlBlockLog::class.java))
         val healthWriters = sources.filter { it.readText().contains(".setLogHealth(") }
         assertEquals(listOf("AppWallApplication.kt"), healthWriters.map { it.name })
+        // Step 16b: attribution is the service's to say, like whether the firewall runs.
+        val attributionWriters = sources.filter { it.readText().contains(".setAttribution(") }
+        assertEquals(listOf("FirewallVpnService.kt"), attributionWriters.map { it.name })
     }
 
     @Test

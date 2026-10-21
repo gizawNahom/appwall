@@ -22,6 +22,7 @@ import dev.appwall.core.firewall.DNS_SERVER
 import dev.appwall.core.firewall.TunnelPlan
 import dev.appwall.core.firewall.tunnelPlan
 import dev.appwall.core.state.AlwaysOn
+import dev.appwall.core.state.Attribution
 import dev.appwall.core.state.FirewallState
 import dev.appwall.core.state.FirewallStatus
 import dev.appwall.core.state.OffReason
@@ -80,6 +81,8 @@ class FirewallVpnService : VpnService() {
             onSkipped = { count, error -> if (count % 100 == 1) Log.w(TAG, "Skipped a packet ($count so far)", error) },
         )
         session.start()
+        // Android 10 is the first that can say which app a connection belongs to.
+        status.setAttribution(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) Attribution.FULL else Attribution.LIMITED)
         // Rule changes from screens and notifications: saved by FirewallCommands, applied here.
         policySubscription = settings.policyChanged.subscribe(::onPolicyChanged)
         val filter = IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply { addDataScheme("package") }

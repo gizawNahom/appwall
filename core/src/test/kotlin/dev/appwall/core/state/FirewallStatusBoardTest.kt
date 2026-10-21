@@ -74,9 +74,11 @@ class FirewallStatusBoardTest {
     fun droppedTriesSurviveTheServicesUpdates() {
         board.countDropped(5)
         board.setLogHealth(LogHealth.Ok)
+        board.setAttribution(Attribution.LIMITED)
         board.publish(FirewallStatus(On(2)))
         assertEquals(5L, board.status.droppedTries)
         assertEquals(LogHealth.Ok, board.status.logHealth)
+        assertEquals(Attribution.LIMITED, board.status.attribution)
         board.stopped(OffReason.TURNED_OFF)
         assertEquals(5L, board.status.droppedTries)
         scheduler.advance()
