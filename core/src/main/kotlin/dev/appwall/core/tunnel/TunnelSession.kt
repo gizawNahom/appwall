@@ -32,7 +32,8 @@ fun interface ConnectionOwners {
  *
  * There is one session per service run, with one [TryTracker], so rule changes don't reset what
  * it knows. A rule change hands it a new tunnel with [switchTo]; it switches at its next loop turn
- * (within [pollMs]) and closes the old one. Two readers never exist.
+ * (within [pollMs]) and closes the old one. Two readers never exist. The loop runs, and idles
+ * while it has no tunnel, where [host] says: on a [LoopThread] in the service.
  *
  * The tunnel must stay up whatever goes wrong: closing it gives blocked apps their network back.
  * So a packet that fails is skipped, and a tunnel is closed in only two cases: replaced by
@@ -45,38 +46,42 @@ class TunnelSession(
     private val loggingEnabled: () -> Boolean,
     /** Called once per try; must not block for long. Failures are contained. */
     private val onTry: (owner: String?, packet: Packet) -> Unit,
-    /** The loop stopped on its own; called from the session's thread. */
+    /** The loop stopped on its own; called from the loop. */
     private val onFailure: (Throwable?) -> Unit,
     /** A packet was skipped because handling it failed; [count] so far, for occasional logging. */
-    private val onSkipped: (count: Int, error: Exception) -> Unit = { _, _ -> },
-    private val clock: () -> Long = System::currentTimeMillis,
-    private val pollMs: Int = 1000,
+    private val onSkipped: (count: Int, error: Exception) -> Unit,
+    private val clock: () -> Long,
+    private val host: LoopHost,
+    /** How long a read or an idle waits; also how long a hand-over can wait for the read in progress. */
+    private val pollMs: Int,
 ) {
-    /** The blocked apps right now; replaced as a whole when the rules change. */
-    @Volatile var blocked: Set<String> = emptySet()
+    @Volatile private var blocked: Set<String> = emptySet()
 
-    private val tracker = TryTracker({ pickOwner(owners.packagesOf(it), blocked) }) { owner, packet ->
-        contained { onTry(owner, packet) }
-    }
+    private val tracker = TryTracker(::ownerOf, ::countTry)
     private var skipped = 0
 
-    private val lock = Object()
+    private val lock = Any()
     private var current: Tunnel? = null
     private var next: Tunnel? = null
     private var switchPending = false
     private var stopped = false
     private var running = false
 
+    /** The blocked apps right now; replaced as a whole when the rules change. */
+    fun updateBlocked(apps: Set<String>) {
+        blocked = apps
+    }
+
     /** Starts (or, after a failure, restarts) the loop. Does nothing if running or shut down. */
     fun start() {
-        if (claimLoop()) Thread(::loop, "appwall-tunnel").start()
+        if (claimLoop()) host.launch(::loop)
     }
 
     /** Marks the loop as running, unless it already is or the session is shut down. */
-    internal fun claimLoop(): Boolean = synchronized(lock) {
-        if (stopped || running) return false
-        running = true
-        true
+    private fun claimLoop(): Boolean = synchronized(lock) {
+        val free = !stopped && !running
+        if (free) running = true
+        free
     }
 
     /** Hands over a new tunnel (or none: nothing to block). The previous one gets closed. */
@@ -90,7 +95,7 @@ class TunnelSession(
             if (switchPending) next?.takeIf { it !== tunnel }?.close()
             next = tunnel
             switchPending = true
-            if (running) lock.notifyAll() else adopt()
+            if (running) host.wake() else adopt()
         }
     }
 
@@ -99,25 +104,24 @@ class TunnelSession(
         synchronized(lock) {
             if (stopped) return
             stopped = true
-            if (running) lock.notifyAll() else closeAll()
+            if (running) host.wake() else closeAll()
         }
     }
 
     private fun loop() {
         val buffer = ByteArray(32767)
-        var failure: Throwable? = null
-        try {
+        val failure = try {
             while (step(buffer)) Unit
+            null
         } catch (e: Throwable) {
             // Errors too: an uncaught one would crash the app and drop the tunnel.
-            failure = e
-        } finally {
-            loopEnded(failure)
+            e
         }
+        loopEnded(failure)
     }
 
     /** The loop is over: close up if shut down, otherwise report the failure. */
-    internal fun loopEnded(failure: Throwable?) {
+    private fun loopEnded(failure: Throwable?) {
         val unexpected = synchronized(lock) {
             running = false
             if (stopped) closeAll()
@@ -128,22 +132,26 @@ class TunnelSession(
 
     /** One loop turn: take over a new tunnel if one is waiting, then read or idle. False once stopped. */
     internal fun step(buffer: ByteArray): Boolean {
-        val tunnel = synchronized(lock) {
-            if (stopped) return false
-            adopt()
-            current ?: run {
-                lock.wait(pollMs.toLong()) // nothing to read until switchTo() or shutdown()
-                null
+        // Whether to go on, and with which tunnel, is decided in one go under the lock.
+        var taken: Tunnel? = null
+        val ending = synchronized(lock) {
+            if (!stopped) {
+                adopt()
+                taken = current
             }
+            stopped
         }
+        if (ending) return false
+        val tunnel = taken
         if (tunnel == null) {
-            contained { tracker.sweep(clock()) }
+            host.idle(pollMs) // nothing to read until switchTo() or shutdown() wakes it
+            contained(::sweep)
             return true
         }
         val length = tunnel.packets.read(buffer, pollMs)
         when {
             length > 0 -> contained { handle(buffer, length) }
-            length == 0 -> contained { tracker.sweep(clock()) }
+            length == 0 -> contained(::sweep)
             // An old tunnel hangs up once its replacement is established: just switch.
             else -> synchronized(lock) { if (!switchPending && !stopped) throw TunnelFailed() }
         }
@@ -156,6 +164,13 @@ class TunnelSession(
         if (!shouldCount(packet, blocked.size)) return
         tracker.onPacket(packet, clock())
     }
+
+    /** Reports the tries that have waited long enough for their app to be named. */
+    private fun sweep() = tracker.sweep(clock())
+
+    private fun ownerOf(packet: Packet): String? = pickOwner(owners.packagesOf(packet), blocked)
+
+    private fun countTry(owner: String?, packet: Packet) = contained { onTry(owner, packet) }
 
     /** Holds [lock]. Takes the waiting tunnel, if any, and closes the one it replaces. */
     private fun adopt() {
@@ -174,9 +189,10 @@ class TunnelSession(
         current = null
     }
 
-    private inline fun contained(work: () -> Unit) {
+    /** Runs [work]; if it fails, that packet (or sweep) is skipped and [onSkipped] is told. */
+    private fun contained(work: Runnable) {
         try {
-            work()
+            work.run()
         } catch (e: Exception) {
             onSkipped(++skipped, e)
         }

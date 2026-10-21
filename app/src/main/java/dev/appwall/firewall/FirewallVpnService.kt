@@ -30,6 +30,7 @@ import dev.appwall.core.state.FirewallState
 import dev.appwall.core.state.FirewallStatus
 import dev.appwall.core.state.OffReason
 import dev.appwall.core.state.Subscription
+import dev.appwall.core.tunnel.LoopThread
 import dev.appwall.core.tunnel.TunnelSession
 import dev.appwall.home.HomeActivity
 
@@ -83,6 +84,9 @@ class FirewallVpnService : VpnService() {
             },
             // Logged now and then, not per packet: a broken tunnel could fail on every one.
             onSkipped = { count, error -> if (count % 100 == 1) Log.w(TAG, "Skipped a packet ($count so far)", error) },
+            clock = System::currentTimeMillis,
+            host = LoopThread("appwall-tunnel"),
+            pollMs = 1000, // a rule change takes effect within a second
         )
         session.start()
         // Android 10 is the first that can say which app a connection belongs to.
@@ -150,7 +154,7 @@ class FirewallVpnService : VpnService() {
         val blocked = appWall.settings.policy.blocked
         appliedBlocked = blocked
         Log.i(TAG, "Applying rules: ${blocked.size} blocked")
-        session.blocked = blocked
+        session.updateBlocked(blocked)
         val plan = tunnelPlan(blocked, ::isInstalled)
         var routed = 0
         if (plan is TunnelPlan.Route) {
