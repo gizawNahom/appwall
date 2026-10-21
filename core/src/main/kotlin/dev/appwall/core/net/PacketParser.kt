@@ -21,10 +21,14 @@ object PacketParser {
 
     /** The longest a DNS name can be on the wire, length bytes included (RFC 1035). */
     private const val MAX_DNS_NAME = 255
+    /** A DNS message's fixed header; the first question's name follows it. */
+    private const val DNS_HEADER = 12
+    /** Where in the header a DNS message says how many questions it asks. */
+    private const val QUESTION_COUNT = 4
 
     /** Parses an IPv4 or IPv6 packet read from the tunnel; null if it's too short or not IP. */
     fun parse(b: ByteArray, length: Int): Packet? {
-        if (length < 1) return null
+        if (length == 0) return null
         val headerLength: Int
         val protocol: Int
         val source: ByteArray
@@ -55,15 +59,15 @@ object PacketParser {
         }
         val dnsQuery = if (protocol == UDP && destinationPort == 53) dnsQuestion(b, headerLength + 8, length) else null
 
-        return Packet(
-            protocol,
-            InetAddress.getByAddress(source),
-            sourcePort,
-            InetAddress.getByAddress(destination),
-            destinationPort,
-            dnsQuery,
-        )
+        return Packet(protocol, address(source), sourcePort, address(destination), destinationPort, dnsQuery)
     }
+
+    /**
+     * An IPv4 or IPv6 address from its 4 or 16 bytes. Typed here, so the Java method's result is an
+     * [InetAddress] (it never returns null) rather than a platform type null-checked at each use;
+     * [Packet]'s constructor still rejects a null.
+     */
+    private val address: (ByteArray) -> InetAddress = InetAddress::getByAddress
 
     fun protocolName(protocol: Int): String = when (protocol) {
         TCP -> "TCP"
@@ -79,21 +83,40 @@ object PacketParser {
      * `\DDD`, `\.` and `\\`. A name longer than DNS allows (255 bytes on the wire) isn't one.
      */
     private fun dnsQuestion(b: ByteArray, start: Int, length: Int): String? {
-        if (length < start + 12 || u16(b, start + 4) == 0) return null // no room, or no questions
-        val labels = mutableListOf<String>()
-        var i = start + 12
-        var wireLength = 1 // the closing zero byte
-        while (true) {
-            if (i >= length) return null // truncated before the name's end, so not the real name
+        val nameStart = start + DNS_HEADER
+        val nameEnd = nameEnd(b, nameStart, length) ?: return null
+        if (nameEnd + 1 - nameStart > MAX_DNS_NAME) return null
+        // Read only now: a whole name was there, so the header before it was too.
+        if (u16(b, start + QUESTION_COUNT) == 0) return null // no questions, so the bytes aren't a name
+        return labels(b, nameStart).joinToString(".").ifEmpty { null } // the root name
+    }
+
+    /**
+     * Where the name starting at [from] ends: the index of its closing zero byte. Null if it's
+     * compressed, or cut off by [length] before its end (so not the real name). Reads nothing at
+     * or past [length].
+     */
+    private fun nameEnd(b: ByteArray, from: Int, length: Int): Int? {
+        var i = from
+        while (i < length) {
             val labelLength = b[i].toInt() and 0xFF
-            if (labelLength == 0) break
-            if (labelLength and 0xC0 != 0 || i + 1 + labelLength > length) return null // compressed or truncated
-            wireLength += 1 + labelLength
-            if (wireLength > MAX_DNS_NAME) return null
+            if (labelLength == 0) return i
+            if (labelLength and 0xC0 != 0) return null // a pointer to a name elsewhere in the message
+            i += 1 + labelLength
+        }
+        return null
+    }
+
+    /** The labels of the name starting at [from], as shown. Only for a name [nameEnd] found whole. */
+    private fun labels(b: ByteArray, from: Int): List<String> {
+        val labels = mutableListOf<String>()
+        var i = from
+        while (b[i].toInt() != 0) {
+            val labelLength = b[i].toInt() and 0xFF
             labels += presentation(b, i + 1, labelLength)
             i += 1 + labelLength
         }
-        return labels.joinToString(".").ifEmpty { null }
+        return labels
     }
 
     /** One label as DNS tools print it (RFC 1035 section 5.1). */

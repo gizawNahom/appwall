@@ -94,6 +94,29 @@ class PacketParserTest {
     }
 
     @Test
+    fun printableAsciiIsShownAsIsUpToItsEdges() {
+        // Space (0x20) and DEL (0x7F) are just outside it, '!' (0x21) and '~' (0x7E) just inside.
+        val name = dnsName(byteArrayOf(0x20, 0x21, 0x7E, 0x7F))
+        val p = parse(ipv4(PacketParser.UDP, "10.111.0.1", "10.111.0.2", transport(3333, 53) + name))!!
+        assertEquals("\\032!~\\127", p.dnsQuery)
+    }
+
+    @Test
+    fun theRootNameIsNoName() {
+        val p = parse(ipv4(PacketParser.UDP, "10.111.0.1", "10.111.0.2", transport(3333, 53) + dnsName()))!!
+        assertNull(p.dnsQuery)
+    }
+
+    @Test
+    fun aNameIsReadUpToTheGivenLengthOnly() {
+        // Cut right before the name's closing zero byte: the buffer still holds it, but past the length.
+        val packet = ipv4(PacketParser.UDP, "10.111.0.1", "10.111.0.2", transport(3333, 53) + dns("www.example.com"))
+        val closingZero = packet.size - 4 - 1
+        assertNull(PacketParser.parse(packet, closingZero)!!.dnsQuery)
+        assertEquals("www.example.com", PacketParser.parse(packet, closingZero + 1)!!.dnsQuery)
+    }
+
+    @Test
     fun aNameLongerThanDnsAllowsIsNotOne() {
         fun label(n: Int) = ByteArray(n) { 'a'.code.toByte() }
         val longest = dnsName(label(63), label(63), label(63), label(61)) // 255 bytes on the wire: 253 characters
@@ -126,11 +149,20 @@ class PacketParserTest {
     }
 
     @Test
-    fun truncatedTransportHeaderHasNoPorts() {
+    fun portsNeedTheirFourBytesWhole() {
         val packet = ipv4(PacketParser.TCP, "10.111.0.1", "1.2.3.4", transport(1234, 80))
-        val p = PacketParser.parse(packet, 20 + 2)!!
-        assertEquals(0, p.sourcePort)
-        assertEquals(0, p.destinationPort)
+        val cut = PacketParser.parse(packet, 20 + 3)!!
+        assertEquals(listOf(0, 0), listOf(cut.sourcePort, cut.destinationPort))
+        val whole = PacketParser.parse(packet, 20 + 4)!!
+        assertEquals(listOf(1234, 80), listOf(whole.sourcePort, whole.destinationPort))
+    }
+
+    @Test
+    fun aBareIpHeaderIsEnough() {
+        val v4 = parse(ipv4(PacketParser.TCP, "10.0.0.1", "10.0.0.2", ByteArray(0)))!!
+        assertEquals(InetAddress.getByName("10.0.0.2"), v4.destination)
+        val v6 = parse(ipv6(PacketParser.TCP, "::1", "::2", ByteArray(0)))!!
+        assertEquals(InetAddress.getByName("::2"), v6.destination)
     }
 
     @Test
