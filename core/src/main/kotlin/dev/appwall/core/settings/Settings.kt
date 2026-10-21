@@ -1,6 +1,8 @@
 package dev.appwall.core.settings
 
 import dev.appwall.core.firewall.NewAppMode
+import dev.appwall.core.health.ProbeResult
+import dev.appwall.core.health.Probed
 import dev.appwall.core.state.ChangeSignal
 
 /** What the firewall enforces: whether it's on, which apps are blocked, and what to do about new apps. */
@@ -52,7 +54,25 @@ fun decodeLogSettings(values: Map<String, Any?>): LogSettings {
 fun decodeScreenPrefs(values: Map<String, Any?>): ScreenPrefs =
     ScreenPrefs(showSystemApps = values[SettingsKeys.SHOW_SYSTEM_APPS] as? Boolean ?: ScreenPrefs().showSystemApps)
 
-interface FirewallPolicyReader {
+/**
+ * What's wrong with the stored values, if anything: a known key holding the wrong type, or a
+ * new-app mode no version wrote. Missing keys are fine (they get defaults). Decoding is lenient so
+ * the screens always work; this strict check is what start-up uses to decide whether to trust it.
+ */
+fun settingsProblems(values: Map<String, Any?>): List<String> {
+    fun wrongType(key: String, ok: (Any) -> Boolean) = values[key]?.let { if (ok(it)) null else "$key is ${it::class.simpleName}" }
+    return listOfNotNull(
+        wrongType(SettingsKeys.ENABLED) { it is Boolean },
+        wrongType(SettingsKeys.BLOCKED) { it is Set<*> && it.all { p -> p is String } },
+        wrongType(SettingsKeys.NEW_APP_MODE) { it is String && NewAppMode.entries.any { m -> m.name == it } },
+        wrongType(SettingsKeys.START_ON_BOOT) { it is Boolean },
+        wrongType(SettingsKeys.LOGGING) { it is Boolean },
+        wrongType(SettingsKeys.LOG_RETENTION_DAYS) { it is Int },
+        wrongType(SettingsKeys.SHOW_SYSTEM_APPS) { it is Boolean },
+    )
+}
+
+interface FirewallPolicyReader : Probed {
     val policy: FirewallPolicy
     val policyChanged: ChangeSignal
 }
@@ -65,7 +85,7 @@ interface FirewallPolicyWriter {
     fun setStartOnBoot(start: Boolean)
 }
 
-interface LogSettingsReader {
+interface LogSettingsReader : Probed {
     val logSettings: LogSettings
     val logSettingsChanged: ChangeSignal
 }
@@ -75,7 +95,7 @@ interface LogSettingsWriter {
     fun setLogRetentionDays(days: Int)
 }
 
-interface ScreenPrefsReader {
+interface ScreenPrefsReader : Probed {
     val screenPrefs: ScreenPrefs
     val screenPrefsChanged: ChangeSignal
 }
@@ -125,6 +145,12 @@ class StoredSettings(private val store: KeyValueStore, newSignal: () -> ChangeSi
     override fun setBlocked(packages: Collection<String>, blocked: Boolean) {
         val updated = if (blocked) policy.blocked + packages else policy.blocked - packages.toSet()
         write(SettingsKeys.BLOCKED to updated)
+    }
+
+    /** Checks what's stored now, strictly; one check serves all three kinds. */
+    override fun probe(): ProbeResult {
+        val problems = settingsProblems(store.all())
+        return if (problems.isEmpty()) ProbeResult.Ok else ProbeResult.Failed(problems.joinToString())
     }
 
     override fun setLoggingEnabled(enabled: Boolean) = write(SettingsKeys.LOGGING to enabled)

@@ -1,5 +1,7 @@
 package dev.appwall
 
+import dev.appwall.core.health.ProbeResult
+import dev.appwall.core.health.Probed
 import dev.appwall.core.log.AppSummary
 import dev.appwall.core.log.BlockedTry
 import dev.appwall.core.log.Destination
@@ -24,7 +26,7 @@ class SqlBlockLog(
     private val clock: () -> Long = System::currentTimeMillis,
     private val onDbThread: () -> Boolean,
     private val changed: () -> Unit = {},
-) {
+) : Probed {
     private val merger = LogMerger()
     private var insertsSincePrune = 0
 
@@ -162,6 +164,33 @@ class SqlBlockLog(
         changed()
     }
 
+    /**
+     * The start-up check: the database opens, is at [VERSION], and takes a write that reads back,
+     * inside a transaction that's always rolled back. Catches a corrupt file, full or read-only
+     * storage, a failed upgrade, or SQL this phone's SQLite doesn't run.
+     */
+    override fun probe(): ProbeResult {
+        checkThread()
+        return try {
+            val version = db.query("PRAGMA user_version") { it.int(0) }.single()
+            if (version != VERSION) return ProbeResult.Failed("version $version, expected $VERSION")
+            db.transaction {
+                val rowId = db.insert(
+                    "INSERT INTO log (time, package, protocol, address, port, host, attempts) VALUES (0, ?, 0, '0.0.0.0', 0, NULL, 0)",
+                    listOf(PROBE_PACKAGE),
+                )
+                throw RollBack(db.query("SELECT COUNT(*) FROM log WHERE _id = ?", listOf(rowId)) { it.int(0) }.single() == 1)
+            }
+        } catch (e: RollBack) {
+            if (e.readBack) ProbeResult.Ok else ProbeResult.Failed("a written row didn't read back")
+        } catch (e: Exception) {
+            ProbeResult.Failed(e.toString())
+        }
+    }
+
+    /** Ends the probe's transaction without keeping its row. */
+    private class RollBack(val readBack: Boolean) : Exception()
+
     private fun checkThread() = check(onDbThread()) { "The block log is used only on the database thread" }
 
     private fun retentionMs() = retentionDays() * DAY_MS
@@ -171,6 +200,7 @@ class SqlBlockLog(
         const val FILE = "blocklog.db"
         /** 2: adds the (package, time) index for the per-app queries. */
         const val VERSION = 2
+        private const val PROBE_PACKAGE = "dev.appwall.probe"
         private const val DAY_MS = 24 * 60 * 60 * 1000L
 
         /** Creates the schema in a new, empty database. */

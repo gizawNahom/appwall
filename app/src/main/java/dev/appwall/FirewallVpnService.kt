@@ -109,6 +109,10 @@ class FirewallVpnService : VpnService() {
             }
         }
         // ACTION_APPLY from the UI, or a start by the system (e.g. Always-on VPN).
+        if (!appWall.startup.decision.firewallMayStart) {
+            refuseUnreadableSettings()
+            return START_NOT_STICKY
+        }
         if (!appWall.settings.policy.enabled) appWall.policyWriter.setEnabled(true)
         if (!status.status.running) status.publish(FirewallStatus(FirewallState.Starting))
         applyRules()
@@ -221,8 +225,22 @@ class FirewallVpnService : VpnService() {
         stopSelf()
     }
 
+    /**
+     * The settings didn't pass the start-up check, so which apps to block can't be trusted: rather
+     * than run with a wrong list, stay off and say why.
+     */
+    private fun refuseUnreadableSettings() {
+        Log.w(TAG, "health.startup.refused reason=settings_unreadable action=firewall_start")
+        status.publish(FirewallStatus(FirewallState.Off(OffReason.SETTINGS_UNREADABLE)))
+        // Started at boot with startForegroundService(), Android insists we go foreground first, even to quit.
+        showStatus(0)
+        closeTunnel()
+        showStopped(R.string.settings_unreadable_title, R.string.settings_unreadable_text)
+        stopSelf()
+    }
+
     /** Tells the user the firewall turned itself off after an error, so they know apps are unblocked. */
-    private fun showStopped() {
+    private fun showStopped(title: Int = R.string.stopped_title, text: Int = R.string.stopped_text) {
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_PROBLEMS, getString(R.string.channel_problems), NotificationManager.IMPORTANCE_DEFAULT)
@@ -234,9 +252,9 @@ class FirewallVpnService : VpnService() {
             NOTIFICATION_STOPPED_ID,
             Notification.Builder(this, CHANNEL_PROBLEMS)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle(getString(R.string.stopped_title))
-                .setContentText(getString(R.string.stopped_text))
-                .setStyle(Notification.BigTextStyle().bigText(getString(R.string.stopped_text)))
+                .setContentTitle(getString(title))
+                .setContentText(getString(text))
+                .setStyle(Notification.BigTextStyle().bigText(getString(text)))
                 .setContentIntent(openApp)
                 .setAutoCancel(true)
                 .build(),

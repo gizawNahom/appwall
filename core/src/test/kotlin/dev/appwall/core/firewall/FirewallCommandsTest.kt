@@ -1,5 +1,6 @@
 package dev.appwall.core.firewall
 
+import dev.appwall.core.health.ProbeResult
 import dev.appwall.core.settings.FirewallPolicy
 import dev.appwall.core.settings.FirewallPolicyReader
 import dev.appwall.core.settings.FirewallPolicyWriter
@@ -59,6 +60,7 @@ class FirewallCommandsTest {
         override var policy = FirewallPolicy()
         override val policyChanged = ChangeSignal(FakeScheduler())
         var writes = 0
+        override fun probe() = ProbeResult.Ok
 
         override fun setEnabled(enabled: Boolean) = write(policy.copy(enabled = enabled))
         override fun setBlocked(packages: Collection<String>, blocked: Boolean) =

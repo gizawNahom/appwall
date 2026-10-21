@@ -1,7 +1,9 @@
 package dev.appwall
 
+import dev.appwall.core.health.Probed
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -79,6 +81,15 @@ class ArchitectureRulesTest {
         val adapter = File("src/main/java/dev/appwall/AppListAdapter.kt").readText()
         val reaching = listOf("SqlBlockLog", "onDb(", "appWall", "settings.").filter { it in adapter }
         assertEquals(emptyList<String>(), reaching)
+    }
+
+    @Test
+    fun criticalPortsAreCheckedAtStartUp() {
+        // Step 16a: the block log and the settings readers can't be used unchecked. (The readers
+        // extend Probed in :core, so the compiler enforces it there.)
+        assertTrue(Probed::class.java.isAssignableFrom(SqlBlockLog::class.java))
+        val healthWriters = sources.filter { it.readText().contains(".setLogHealth(") }
+        assertEquals(listOf("AppWallApplication.kt"), healthWriters.map { it.name })
     }
 
     @Test

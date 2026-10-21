@@ -11,6 +11,9 @@ import android.os.Looper
 import android.util.Log
 import dev.appwall.core.log.TryQueue
 import dev.appwall.core.firewall.FirewallCommands
+import dev.appwall.core.health.StartupChecks
+import dev.appwall.core.health.StartupDecision
+import dev.appwall.core.state.LogHealth
 import dev.appwall.core.settings.FirewallPolicyWriter
 import dev.appwall.core.settings.ScreenSettings
 import dev.appwall.core.settings.StoredSettings
@@ -67,6 +70,10 @@ class AppWallApplication : Application() {
     lateinit var firewall: FirewallCommands
         private set
 
+    /** The start-up checks' verdict: whether the firewall may start, and whether the log is usable. */
+    lateinit var startup: StartupChecks
+        private set
+
     /** Installed apps, loaded off the UI thread and remembered between screens. */
     lateinit var apps: InstalledAppsRepository
         private set
@@ -95,6 +102,20 @@ class AppWallApplication : Application() {
             startService = { sendToFirewall(FirewallVpnService.ACTION_APPLY) },
             stopService = { sendToFirewall(FirewallVpnService.ACTION_STOP) },
         )
+
+        // Wired; now probe before use. Settings are in memory already; the log is checked as the
+        // database thread's first job, so it runs before any write or query.
+        startup = StartupChecks(storedSettings, log)
+        reportRefusals(startup.decision)
+        db.execute {
+            val decision = startup.checkLog()
+            firewallStatus.setLogHealth(decision.logHealth)
+            reportRefusals(decision.copy(refused = decision.refused - "settings_unreadable")) // said already
+        }
+    }
+
+    private fun reportRefusals(decision: StartupDecision) {
+        for (code in decision.refused) Log.w("AppWall", "health.startup.refused reason=$code")
     }
 
     private fun sendToFirewall(action: String) {
@@ -103,8 +124,11 @@ class AppWallApplication : Application() {
 
     /** On the database thread: writes the queued tries as one batch. */
     private fun writeTries() {
+        val batch = tries.drain()
+        // An unusable log (see the start-up checks) drops tries; the apps stay blocked regardless.
+        if (startup.decision.logHealth is LogHealth.Unavailable) return
         try {
-            log.record(tries.drain())
+            log.record(batch)
         } catch (e: Exception) {
             // Only the log loses them; the apps stayed blocked.
             Log.w("AppWall", "Writing blocked tries failed", e)

@@ -1,6 +1,7 @@
 package dev.appwall.core.settings
 
 import dev.appwall.core.firewall.NewAppMode
+import dev.appwall.core.health.ProbeResult
 import dev.appwall.core.state.ChangeSignal
 import dev.appwall.core.state.FakeScheduler
 import org.junit.Assert.assertEquals
@@ -33,6 +34,17 @@ class SettingsTest {
         val values = mapOf("enabled" to "yes", "blocked" to "a", "new_app_mode" to "SOMETIMES", "log_retention_days" to "7")
         assertEquals(FirewallPolicy(), decodeFirewallPolicy(values))
         assertEquals(LogSettings(), decodeLogSettings(values))
+    }
+
+    @Test
+    fun theStrictCheckFindsWhatLenientDecodingHides() {
+        assertEquals(emptyList<String>(), settingsProblems(emptyMap()))
+        assertEquals(emptyList<String>(), settingsProblems(mapOf("blocked" to setOf("a"), "new_app_mode" to "BLOCK", "log_retention_days" to 7, "timers" to setOf<String>())))
+        val problems = settingsProblems(mapOf("enabled" to "yes", "blocked" to "a", "new_app_mode" to "SOMETIMES", "log_retention_days" to "7"))
+        assertEquals(listOf("enabled", "blocked", "new_app_mode", "log_retention_days"), problems.map { it.substringBefore(" ") })
+        val settings = StoredSettings(MapStore(mutableMapOf("blocked" to "a"))) { ChangeSignal(FakeScheduler()) }
+        assertTrue(settings.probe() is ProbeResult.Failed)
+        assertEquals(ProbeResult.Ok, StoredSettings(MapStore(mutableMapOf())) { ChangeSignal(FakeScheduler()) }.probe())
     }
 
     @Test

@@ -12,6 +12,16 @@ enum class OffReason {
     NO_PERMISSION,
     /** Reading the tunnel kept failing, so the service turned itself off. */
     TUNNEL_FAILED,
+    /** The stored settings didn't decode, so which apps to block can't be trusted. */
+    SETTINGS_UNREADABLE,
+}
+
+/** Whether the block log can be used, as the start-up check found. */
+sealed interface LogHealth {
+    data object Checking : LogHealth
+    data object Ok : LogHealth
+    /** Tries are dropped; blocking is unaffected. */
+    data class Unavailable(val reason: String) : LogHealth
 }
 
 /** Whether the firewall is running, as only the firewall service itself can say. */
@@ -30,6 +40,7 @@ data class FirewallStatus(
     val alwaysOn: AlwaysOn = AlwaysOn.UNKNOWN,
     /** Blocked tries the log had no room for (they were still blocked), since the app started. */
     val droppedTries: Long = 0,
+    val logHealth: LogHealth = LogHealth.Checking,
 ) {
     val running: Boolean get() = firewall !is FirewallState.Off
 }
@@ -37,25 +48,28 @@ data class FirewallStatus(
 /**
  * The firewall's live status, for screens to show and observe. Starts as off (not running); only
  * the firewall service publishes to it, so a screen never shows "on" from a saved setting alone.
- * The database thread adds only the dropped-tries count.
+ * The database thread adds only the dropped-tries count, and the start-up checks only the log's health.
  */
 class FirewallStatusBoard(val changed: ChangeSignal) {
     @Volatile
     var status = FirewallStatus()
         private set
 
-    /** The service's view of the firewall; [FirewallStatus.droppedTries] is kept, not replaced. */
-    fun publish(status: FirewallStatus) = update { status.copy(droppedTries = it.droppedTries) }
+    /** The service's view of the firewall; the dropped-tries count and log health are kept, not replaced. */
+    fun publish(status: FirewallStatus) = update { status.copy(droppedTries = it.droppedTries, logHealth = it.logHealth) }
 
     /** The service stopped: off for [reason], unless it already said why. Always-on is unknown again. */
     fun stopped(reason: OffReason) = update { current ->
         val firewall = current.firewall
         val keep = firewall is FirewallState.Off && firewall.reason != OffReason.NOT_RUNNING
-        FirewallStatus(if (keep) firewall else FirewallState.Off(reason), AlwaysOn.UNKNOWN, current.droppedTries)
+        FirewallStatus(if (keep) firewall else FirewallState.Off(reason), AlwaysOn.UNKNOWN, current.droppedTries, current.logHealth)
     }
 
     /** From the database thread: [total] tries dropped so far for want of room in the log's queue. */
     fun countDropped(total: Long) = update { it.copy(droppedTries = total) }
+
+    /** From the start-up checks: whether the block log can be used. */
+    fun setLogHealth(health: LogHealth) = update { it.copy(logHealth = health) }
 
     private fun update(change: (FirewallStatus) -> FirewallStatus) {
         synchronized(this) {

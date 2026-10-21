@@ -6,6 +6,8 @@
     <string name="channel_status">Firewall status</string>
     <string name="channel_problems">Problems</string>
     <string name="stopped_title">AppWall turned itself off</string>
+    <string name="settings_unreadable_title">AppWall can\'t read its settings</string>
+    <string name="settings_unreadable_text">Its list of blocked apps may be damaged, so the firewall stays off rather than block the wrong apps. Clearing AppWall\'s storage in Android settings fixes this, but you\'ll need to choose your blocked apps again.</string>
     <string name="stopped_text">The firewall hit an error it couldn\'t recover from, so blocked apps can use the internet again. Open AppWall to turn it back on.</string>
     <!-- Home -->
     <string name="wall_up">Wall up</string>

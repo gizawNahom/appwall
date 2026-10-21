@@ -1,5 +1,6 @@
 package dev.appwall
 
+import dev.appwall.core.health.ProbeResult
 import dev.appwall.core.log.AppSummary
 import dev.appwall.core.log.BlockedTry
 import dev.appwall.core.log.Destination
@@ -226,6 +227,23 @@ class SqlBlockLogTest {
         retentionDays = 1
         log.prune()
         assertEquals(1, rows())
+    }
+
+    // Start-up check
+
+    @Test
+    fun theProbePassesAndLeavesNoRowBehind() {
+        record(CHROME, tcp("1.2.3.4", 443))
+        db.execute("PRAGMA user_version = ${SqlBlockLog.VERSION}")
+        assertEquals(ProbeResult.Ok, log.probe())
+        assertEquals(1, rows()) // the probe's row was rolled back
+        assertEquals(listOf(CHROME), db.query("SELECT package FROM log") { it.string(0) })
+    }
+
+    @Test
+    fun theProbeFailsOnAnUnexpectedVersion() {
+        db.execute("PRAGMA user_version = 1")
+        assertTrue(log.probe() is ProbeResult.Failed)
     }
 
     // Schema versions
