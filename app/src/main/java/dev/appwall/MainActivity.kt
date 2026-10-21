@@ -24,6 +24,7 @@ import android.widget.ListView
 import android.widget.Switch
 import android.widget.TextView
 import dev.appwall.core.apps.AppEntry
+import dev.appwall.core.screens.AppActivity
 import dev.appwall.core.screens.CardLine
 import dev.appwall.core.screens.Headline
 import dev.appwall.core.screens.HomeEmpty
@@ -48,6 +49,9 @@ class MainActivity : Activity() {
     private var stats: HomeLogStats? = null
     private var tab = HomeTab.BLOCKED
     private var query = ""
+    /** The open (expanded) row's app, if any; it stays open across refreshes and tab switches. */
+    private var expanded: String? = null
+    private var activity: AppActivity? = null
     private var undo: (() -> Unit)? = null
     private val hideUndo = Runnable { findViewById<View>(R.id.undo_bar).visibility = View.GONE }
 
@@ -58,15 +62,15 @@ class MainActivity : Activity() {
         logLoader({
             val now = System.currentTimeMillis()
             val startOfToday = startOfDay(now, ZoneId.systemDefault())
-            val expanded = adapter.expandedPackage
+            val open = expanded
             fun(log: SqlBlockLog) = HomeLogStats(
                 today = log.attemptsSince(startOfToday),
                 sparkline = log.attemptsPerBucket(now - DAY_MS, DAY_MS / SPARK_BARS, SPARK_BARS).toList(),
                 lastAttempt = log.lastAttemptTime(),
-            ) to expanded?.let { AppListAdapter.loadDetails(log, it, now) }
-        }) { (loaded, details) ->
+            ) to open?.let { appActivity(log, it, now) }
+        }) { (loaded, openActivity) ->
             stats = loaded
-            adapter.details = details
+            activity = openActivity
             render()
         }
     }
@@ -334,8 +338,9 @@ class MainActivity : Activity() {
 
     /** Tapping a row opens it in place to show what's known about the app; tapping again closes it. */
     private fun onAppTapped(app: AppEntry) {
-        adapter.toggleExpanded(app)
-        if (adapter.expandedPackage != null) statsLoader.reload() // loads the open row's details
+        expanded = if (expanded == app.packageName) null else app.packageName
+        render()
+        if (expanded != null) statsLoader.reload() // reads the open row's activity
     }
 
     private fun selectTab(tab: HomeTab) {
@@ -419,6 +424,7 @@ class MainActivity : Activity() {
         val status = appWall.firewallStatus.status
         val state = homeState(
             apps, settings.policy, settings.screenPrefs.showSystemApps, status, appWall.anotherVpnActive(), stats, tab, query,
+            expanded, activity,
         )
         adapter.show(state)
 
@@ -464,6 +470,19 @@ class MainActivity : Activity() {
         }
     }
 
+    /** The open row's recent activity; runs on the database thread. */
+    private fun appActivity(log: SqlBlockLog, packageName: String, now: Long): AppActivity {
+        val (top, total) = log.topDestinations(packageName, now - WEEK_MS, 3)
+        return AppActivity(
+            packageName = packageName,
+            lastAttempt = log.lastAttemptTime(packageName),
+            week = log.attemptsSince(now - WEEK_MS)[packageName] ?: 0,
+            hourly = log.attemptsPerBucket(now - DAY_MS, HOUR_MS, 24, packageName).toList(),
+            topDestinations = top,
+            destinationCount = total,
+        )
+    }
+
     /** "Blocked 5", with the count in Geist Mono, secondary color. */
     private fun tabLabel(label: Int, count: Int?): CharSequence =
         if (count == null) getString(label) else FontSpan.labelWithCount(this, getString(label), count)
@@ -475,7 +494,9 @@ class MainActivity : Activity() {
         private const val REQUEST_NOTIFICATIONS = 2
         private const val REQUEST_PICK = 3
         private const val UNDO_MS = 5000L
-        private const val DAY_MS = 24 * 60 * 60 * 1000L
+        private const val HOUR_MS = 60 * 60 * 1000L
+        private const val DAY_MS = 24 * HOUR_MS
+        private const val WEEK_MS = 7 * DAY_MS
         private const val SPARK_BARS = 12 // two-hour bars over the last day
         private const val INSTANT_REFUSAL_MS = 700L
     }

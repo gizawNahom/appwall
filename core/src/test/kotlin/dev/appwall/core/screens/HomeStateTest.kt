@@ -89,6 +89,31 @@ class HomeStateTest {
         assertEquals(Headline.NothingBlocked, state(blocked = emptySet()).headline)
     }
 
+    @Test
+    fun onlyTheOpenRowHasDetails() {
+        val activity = AppActivity("com.game", 1_000, 12, List(24) { 1 }, listOf("a.example", "b.example", "c.example"), 5)
+        val rows = homeState(apps, FirewallPolicy(blocked = setOf("com.game", "com.bank")), false, on, false, null, HomeTab.BLOCKED, "", "com.game", activity).rows
+        assertEquals(listOf("com.game"), rows.filter { it.details != null }.map { it.app.packageName })
+        // Another app's activity (the open row just changed) isn't shown as this one's.
+        val stale = homeState(apps, FirewallPolicy(blocked = setOf("com.game", "com.bank")), false, on, false, null, HomeTab.BLOCKED, "", "com.bank", activity).rows
+        assertEquals(DetailsSummary.Loading, stale.first { it.app.packageName == "com.bank" }.details?.summary)
+    }
+
+    @Test
+    fun detailRows() {
+        val busy = AppActivity("x", 1_000, 12, List(24) { 1 }, listOf("a.example", "b.example", "c.example"), 5)
+        assertEquals(
+            RowDetails(DetailsSummary.Activity(1_000, 12), List(24) { 1 }, listOf("a.example", "b.example", "c.example"), 2, showFullLog = true),
+            rowDetails(blocked = true, activity = busy),
+        )
+        val quiet = AppActivity("x", null, 0, List(24) { 0 }, emptyList(), 0)
+        assertEquals(RowDetails(DetailsSummary.NoAttempts, null, emptyList(), 0, showFullLog = false), rowDetails(true, quiet))
+        assertEquals(RowDetails(DetailsSummary.Loading, null, emptyList(), 0, showFullLog = false), rowDetails(true, null))
+        // Allowed now, but blocked earlier: no activity shown, yet its old log is still reachable.
+        assertEquals(RowDetails(DetailsSummary.Allowed, null, emptyList(), 0, showFullLog = true), rowDetails(false, busy))
+        assertEquals(0, rowDetails(true, busy.copy(destinationCount = 3)).moreDestinations)
+    }
+
     private fun app(label: String, pkg: String, system: Boolean = false, service: Boolean = false) =
         AppEntry(label, pkg, system, service, 0)
 }

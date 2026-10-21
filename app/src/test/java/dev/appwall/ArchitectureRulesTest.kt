@@ -74,6 +74,14 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    fun theHomeListOnlyDraws() {
+        // Step 14b: the adapter renders HomeState; its rows' data is read by the screen's loader.
+        val adapter = File("src/main/java/dev/appwall/AppListAdapter.kt").readText()
+        val reaching = listOf("SqlBlockLog", "onDb(", "appWall", "settings.").filter { it in adapter }
+        assertEquals(emptyList<String>(), reaching)
+    }
+
+    @Test
     fun sourcesWereFound() {
         // Guards the rules above against passing vacuously if the source path is wrong.
         assertEquals(true, sources.any { it.name == "MainActivity.kt" })

@@ -9,14 +9,15 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
 import dev.appwall.core.apps.AppEntry
+import dev.appwall.core.screens.DetailsSummary
 import dev.appwall.core.screens.HomeRow
 import dev.appwall.core.screens.HomeState
 import dev.appwall.core.screens.HomeTab
+import dev.appwall.core.screens.RowDetails
 
 /**
- * The home list, drawn from [HomeState]: which rows, in what order, and their counts are decided
- * there. Tapping a row expands it in place (one at a time) to show what's known about the app.
- * Rules only change through buttons, reported to the screen through [onAction].
+ * The home list. Draws what [HomeState] decided, nothing more: which rows, in what order, their
+ * counts, and what the open row shows. Taps go back to the screen through [onAction].
  */
 class AppListAdapter(
     private val context: Context,
@@ -26,34 +27,6 @@ class AppListAdapter(
 
     /** What a button in a row asks for. TOGGLE is the quick Block/Allow button on the row itself. */
     enum class Action { TOGGLE, ALLOW, BLOCK, FULL_LOG }
-
-    /** The expanded row's app, if any; it stays open across refreshes and tab switches. */
-    private var expanded: String? = null
-
-    fun toggleExpanded(app: AppEntry) {
-        expanded = if (expanded == app.packageName) null else app.packageName
-        notifyDataSetChanged()
-    }
-
-    /** The open row's app, if any: its [details] should be loaded. */
-    val expandedPackage: String? get() = expanded
-
-    /** What the open row shows, loaded off the UI thread with [loadDetails]. */
-    var details: Details? = null
-        set(value) {
-            field = value
-            notifyDataSetChanged()
-        }
-
-    /** The open row's recent activity. */
-    class Details(
-        val packageName: String,
-        val lastAttempt: Long?,
-        val week: Int,
-        val hourly: IntArray,
-        val topDestinations: List<String>,
-        val destinationCount: Int,
-    )
 
     private var shown: List<HomeRow> = emptyList()
     private var tab = HomeTab.BLOCKED
@@ -76,7 +49,7 @@ class AppListAdapter(
         val app = row.app
         val attempts = row.attemptsToday
         val blocked = row.blocked
-        val isExpanded = expanded == app.packageName
+        val isExpanded = row.details != null
         val showActivity = tab == HomeTab.BLOCKED
 
         view.findViewById<ImageView>(R.id.app_icon).setImageDrawable(icons[app.packageName])
@@ -101,7 +74,7 @@ class AppListAdapter(
 
         val details = view.findViewById<View>(R.id.app_details)
         details.visibility = if (isExpanded) View.VISIBLE else View.GONE
-        if (isExpanded) bindDetails(view, app, blocked)
+        row.details?.let { bindDetails(view, app, blocked, it) }
 
         val base = when {
             blocked -> context.resources.getQuantityString(R.plurals.row_blocked_description, attempts, app.label, attempts)
@@ -113,82 +86,41 @@ class AppListAdapter(
         return view
     }
 
-    /** Fills the expanded section: recent activity for blocked apps, and the actions that fit. */
-    private fun bindDetails(view: View, app: AppEntry, blocked: Boolean) {
-        val now = System.currentTimeMillis()
-        // Until this row's details arrive, show its actions only.
-        val details = details?.takeIf { it.packageName == app.packageName }
-        val lastAttempt = details?.lastAttempt
-        val summary = view.findViewById<TextView>(R.id.details_summary)
-        val chart = view.findViewById<SparklineView>(R.id.details_chart)
-        val caption = view.findViewById<View>(R.id.details_chart_caption)
-        val destinations = view.findViewById<TextView>(R.id.details_destinations)
-        val primary = view.findViewById<Button>(R.id.details_primary)
-        val fullLog = view.findViewById<Button>(R.id.details_log)
-
-        if (blocked && details == null) {
-            summary.text = ""
-            chart.visibility = View.GONE
-            caption.visibility = View.GONE
-            destinations.visibility = View.GONE
-            bindButton(primary, app, R.string.allow, Action.ALLOW)
-        } else if (blocked && details != null) {
-            val week = details.week
-            summary.text = if (lastAttempt == null) {
-                context.getString(R.string.details_no_attempts)
-            } else {
-                context.getString(
-                    R.string.details_activity,
-                    TimeText.shortAgo(context, lastAttempt, now),
-                    context.resources.getQuantityString(R.plurals.details_week, week, week),
-                )
-            }
-            val hourly = details.hourly
-            chart.values = hourly
-            chart.contentDescription = context.getString(R.string.details_chart_description, hourly.sum())
-            chart.visibility = if (lastAttempt != null) View.VISIBLE else View.GONE
-            caption.visibility = chart.visibility
-            val top = details.topDestinations
-            val total = details.destinationCount
-            destinations.visibility = if (top.isEmpty()) View.GONE else View.VISIBLE
-            destinations.text = buildString {
-                append(top.joinToString(" · "))
-                if (total > top.size) append(" · ").append(context.getString(R.string.details_more, total - top.size))
-            }
-            bindButton(primary, app, R.string.allow, Action.ALLOW)
-        } else {
-            summary.setText(R.string.details_allowed)
-            chart.visibility = View.GONE
-            caption.visibility = View.GONE
-            destinations.visibility = View.GONE
-            bindButton(primary, app, R.string.block, Action.BLOCK)
+    /** Fills the open row's section: recent activity for blocked apps, and the actions that fit. */
+    private fun bindDetails(view: View, app: AppEntry, blocked: Boolean, details: RowDetails) {
+        view.findViewById<TextView>(R.id.details_summary).text = when (val summary = details.summary) {
+            DetailsSummary.Loading -> ""
+            DetailsSummary.NoAttempts -> context.getString(R.string.details_no_attempts)
+            DetailsSummary.Allowed -> context.getString(R.string.details_allowed)
+            is DetailsSummary.Activity -> context.getString(
+                R.string.details_activity,
+                TimeText.shortAgo(context, summary.lastAttempt, System.currentTimeMillis()),
+                context.resources.getQuantityString(R.plurals.details_week, summary.week, summary.week),
+            )
         }
-        // The log is only worth offering when there's something in it.
-        bindButton(fullLog, app, R.string.details_full_log, Action.FULL_LOG, visible = lastAttempt != null)
+        val chart = view.findViewById<SparklineView>(R.id.details_chart)
+        val hourly = details.hourly
+        chart.visibility = if (hourly != null) View.VISIBLE else View.GONE
+        view.findViewById<View>(R.id.details_chart_caption).visibility = chart.visibility
+        if (hourly != null) {
+            chart.values = hourly.toIntArray()
+            chart.contentDescription = context.getString(R.string.details_chart_description, hourly.sum())
+        }
+        view.findViewById<TextView>(R.id.details_destinations).apply {
+            visibility = if (details.topDestinations.isEmpty()) View.GONE else View.VISIBLE
+            text = buildString {
+                append(details.topDestinations.joinToString(" · "))
+                if (details.moreDestinations > 0) append(" · ").append(context.getString(R.string.details_more, details.moreDestinations))
+            }
+        }
+        val primary = view.findViewById<Button>(R.id.details_primary)
+        if (blocked) bindButton(primary, app, R.string.allow, Action.ALLOW) else bindButton(primary, app, R.string.block, Action.BLOCK)
+        bindButton(view.findViewById(R.id.details_log), app, R.string.details_full_log, Action.FULL_LOG, visible = details.showFullLog)
     }
 
     private fun bindButton(button: Button, app: AppEntry, label: Int, action: Action, visible: Boolean = true) {
         button.visibility = if (visible) View.VISIBLE else View.GONE
         button.setText(label)
         button.setOnClickListener { onAction(app, action) }
-    }
-
-    companion object {
-        private const val HOUR_MS = 60 * 60 * 1000L
-        private const val DAY_MS = 24 * HOUR_MS
-        private const val WEEK_MS = 7 * DAY_MS
-
-        /** Runs the open row's queries; call it on the database thread. */
-        fun loadDetails(log: SqlBlockLog, packageName: String, now: Long): Details {
-            val (top, total) = log.topDestinations(packageName, now - WEEK_MS, 3)
-            return Details(
-                packageName = packageName,
-                lastAttempt = log.lastAttemptTime(packageName),
-                week = log.attemptsSince(now - WEEK_MS)[packageName] ?: 0,
-                hourly = log.attemptsPerBucket(now - DAY_MS, HOUR_MS, 24, packageName),
-                topDestinations = top,
-                destinationCount = total,
-            )
-        }
     }
 }

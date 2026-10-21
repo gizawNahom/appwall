@@ -37,7 +37,48 @@ sealed interface CardLine {
 /** Why the list is empty, if it is (and the apps have loaded). */
 enum class HomeEmpty { NONE, SEARCH_PROMPT, NO_MATCH, NO_BLOCKED, NO_ALLOWED }
 
-data class HomeRow(val app: AppEntry, val blocked: Boolean, val attemptsToday: Int)
+/** The open row's recent activity, as read from the log on the database thread. */
+data class AppActivity(
+    val packageName: String,
+    val lastAttempt: Long?,
+    /** Attempts over the last 7 days. */
+    val week: Int,
+    /** Attempts per hour over the last 24 hours, oldest first. */
+    val hourly: List<Int>,
+    /** The most tried destinations this week, most tried first. */
+    val topDestinations: List<String>,
+    /** How many destinations there were this week in all. */
+    val destinationCount: Int,
+)
+
+/** The first line of an open row. */
+sealed interface DetailsSummary {
+    /** The row's activity hasn't been read yet: show only its actions. */
+    data object Loading : DetailsSummary
+    data object NoAttempts : DetailsSummary
+    data class Activity(val lastAttempt: Long, val week: Int) : DetailsSummary
+    data object Allowed : DetailsSummary
+}
+
+/** What an open (expanded) row shows. Its main button allows a blocked app or blocks an allowed one. */
+data class RowDetails(
+    val summary: DetailsSummary,
+    /** The last 24 hours, or null for no chart. */
+    val hourly: List<Int>?,
+    val topDestinations: List<String>,
+    /** Destinations beyond [topDestinations]: "+N more". */
+    val moreDestinations: Int,
+    /** The log is only worth offering when there's something in it. */
+    val showFullLog: Boolean,
+)
+
+data class HomeRow(
+    val app: AppEntry,
+    val blocked: Boolean,
+    val attemptsToday: Int,
+    /** Only for the open row. */
+    val details: RowDetails? = null,
+)
 
 data class HomeState(
     /** The switch shows what the user chose... */
@@ -74,6 +115,9 @@ fun homeState(
     stats: HomeLogStats?,
     tab: HomeTab,
     query: String,
+    /** The open row's app, if any, and its [activity] once read (ignored if it's another app's). */
+    expanded: String? = null,
+    activity: AppActivity? = null,
 ): HomeState {
     val today = stats?.today.orEmpty()
     val blockedCount = apps?.count { policy.isBlocked(it.packageName) } ?: policy.blocked.size
@@ -92,7 +136,12 @@ fun homeState(
             HomeTab.SEARCH -> if (search.isEmpty()) emptyList() else all.filter(::matches)
         }
     }
-    val rows = shown.map { HomeRow(it, policy.isBlocked(it.packageName), today[it.packageName] ?: 0) }
+    val openActivity = activity?.takeIf { it.packageName == expanded }
+    val rows = shown.map {
+        val blocked = policy.isBlocked(it.packageName)
+        val details = if (it.packageName == expanded) rowDetails(blocked, openActivity) else null
+        HomeRow(it, blocked, today[it.packageName] ?: 0, details)
+    }
 
     val firewall = status.firewall
     val cardLine = when {
@@ -127,5 +176,20 @@ fun homeState(
             tab == HomeTab.BLOCKED -> HomeEmpty.NO_BLOCKED
             else -> HomeEmpty.NO_ALLOWED
         },
+    )
+}
+
+/** An open row: recent activity for a blocked app; for an allowed one, why there's none. */
+fun rowDetails(blocked: Boolean, activity: AppActivity?): RowDetails {
+    val lastAttempt = activity?.lastAttempt
+    val showFullLog = lastAttempt != null
+    if (!blocked) return RowDetails(DetailsSummary.Allowed, null, emptyList(), 0, showFullLog)
+    if (activity == null) return RowDetails(DetailsSummary.Loading, null, emptyList(), 0, showFullLog = false)
+    return RowDetails(
+        summary = if (lastAttempt == null) DetailsSummary.NoAttempts else DetailsSummary.Activity(lastAttempt, activity.week),
+        hourly = if (lastAttempt != null) activity.hourly else null,
+        topDestinations = activity.topDestinations,
+        moreDestinations = (activity.destinationCount - activity.topDestinations.size).coerceAtLeast(0),
+        showFullLog = showFullLog,
     )
 }
