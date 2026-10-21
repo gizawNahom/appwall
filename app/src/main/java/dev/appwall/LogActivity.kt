@@ -14,6 +14,7 @@ import dev.appwall.core.log.AppSummary
 import dev.appwall.core.screens.LogEmpty
 import dev.appwall.core.screens.LogState
 import dev.appwall.core.screens.logState
+import dev.appwall.core.screens.shortCount
 import dev.appwall.core.screens.startOfDay
 import java.time.ZoneId
 
@@ -31,6 +32,8 @@ class LogActivity : Activity() {
     private var shown: LogState? = null
     /** The summary and column titles, when they scroll with the list (see [scrollWithList]). */
     private var header: View? = null
+    /** Keeps each row's "2h" true while nothing else changes. */
+    private val ticker = MinuteTicker(this) { adapter.notifyDataSetChanged() }
 
     /** Reloads whenever the log changes, while the screen is visible. */
     private val loader by lazy {
@@ -77,9 +80,11 @@ class LogActivity : Activity() {
     override fun onStart() {
         super.onStart()
         loader.start(appWall.logChanged, settings.logSettingsChanged)
+        ticker.start()
     }
 
     override fun onStop() {
+        ticker.stop()
         loader.stop()
         super.onStop()
     }
@@ -120,10 +125,10 @@ class LogActivity : Activity() {
             return
         }
 
-        view<TextView>(R.id.log_today).text = state.todayAttempts.toString()
-        view<TextView>(R.id.log_period).text = state.periodAttempts.toString()
+        view<TextView>(R.id.log_today).text = shortCount(state.todayAttempts.toLong())
+        view<TextView>(R.id.log_period).text = shortCount(state.periodAttempts.toLong())
         view<TextView>(R.id.log_period_label).text = resources.getQuantityString(R.plurals.log_stat_period, days, days)
-        view<TextView>(R.id.log_apps).text = state.apps.size.toString()
+        view<TextView>(R.id.log_apps).text = shortCount(state.apps.size.toLong())
         view<TextView>(R.id.log_column_app).text = resources.getQuantityString(R.plurals.log_column_app, days, days)
         view<SparklineView>(R.id.log_chart).apply {
             values = state.hourly.toIntArray()

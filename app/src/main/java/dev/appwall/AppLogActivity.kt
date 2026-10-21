@@ -19,6 +19,7 @@ import dev.appwall.core.screens.AppLogToggle
 import dev.appwall.core.screens.DayLabel
 import dev.appwall.core.screens.TimelineRow
 import dev.appwall.core.screens.appLogState
+import dev.appwall.core.screens.shortCount
 import java.time.ZoneId
 
 /**
@@ -39,6 +40,8 @@ class AppLogActivity : Activity() {
     private var shown: AppLogState? = null
     /** The tabs and column titles, when they scroll with the list (see [scrollWithList]). */
     private var header: View? = null
+    /** Keeps each destination's "2h ago" true while nothing else changes. */
+    private val ticker = MinuteTicker(this) { destinations.notifyDataSetChanged() }
 
     /** Rebuilds the page's [AppLogState] whenever the log or the block rules change, while visible. */
     private val loader by lazy {
@@ -91,9 +94,11 @@ class AppLogActivity : Activity() {
     override fun onStart() {
         super.onStart()
         loader.start(appWall.logChanged, settings.policyChanged)
+        ticker.start()
     }
 
     override fun onStop() {
+        ticker.stop()
         loader.stop()
         super.onStop()
     }
@@ -157,7 +162,7 @@ class AppLogActivity : Activity() {
                 else -> getString(R.string.dest_no_port, ago)
             }
             view.findViewById<MeterView>(R.id.dest_meter).fraction = d.attempts.toFloat() / (state?.meterMax ?: 1)
-            view.findViewById<TextView>(R.id.dest_count).text = d.attempts.toString()
+            view.findViewById<TextView>(R.id.dest_count).text = shortCount(d.attempts.toLong())
             return view
         }
     }

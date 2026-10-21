@@ -62,6 +62,8 @@ class MainActivity : Activity() {
             render()
         }
     }
+    /** Keeps the card's "2h ago" true while nothing else changes. */
+    private val ticker = MinuteTicker(this) { render() }
     private var updatingSwitch = false
     private var consentRequestedAt = 0L
 
@@ -209,9 +211,11 @@ class MainActivity : Activity() {
         subscriptions += settings.policyChanged.subscribe(::render)
         subscriptions += settings.screenPrefsChanged.subscribe(::render)
         lastAttemptLoader.start(appWall.logChanged)
+        ticker.start()
     }
 
     override fun onStop() {
+        ticker.stop()
         lastAttemptLoader.stop()
         subscriptions.forEach(Subscription::unsubscribe)
         subscriptions.clear()
