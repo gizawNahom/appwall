@@ -4,6 +4,7 @@ import dev.appwall.core.apps.AppEntry
 import dev.appwall.core.firewall.NewAppMode
 import dev.appwall.core.settings.FirewallPolicy
 import dev.appwall.core.settings.LogSettings
+import dev.appwall.core.settings.ScreenPrefs
 import dev.appwall.core.state.AlwaysOn
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -34,6 +35,12 @@ class ScreenStatesTest {
             AlwaysOn.ON, false,
         )
         assertEquals(listOf(false, NewAppMode.BLOCK, false, 30), listOf(state.startOnBoot, state.newAppMode, state.loggingEnabled, state.retentionDays))
+    }
+
+    @Test
+    fun showSystemAppsLivesInSettings() {
+        assertEquals(false, settingsState(FirewallPolicy(), LogSettings(), AlwaysOn.ON, false).showSystemApps)
+        assertEquals(true, settingsState(FirewallPolicy(), LogSettings(), AlwaysOn.ON, false, ScreenPrefs(showSystemApps = true)).showSystemApps)
     }
 
     // Picker

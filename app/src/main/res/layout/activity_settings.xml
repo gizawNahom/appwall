@@ -145,6 +145,35 @@
                 style="@style/SettingsNote"
                 android:text="@string/settings_new_app_note" />
 
+            <!-- App list -->
+            <TextView
+                style="@style/SettingsSection"
+                android:text="@string/settings_section_apps" />
+
+            <LinearLayout style="@style/SettingsCard">
+
+                <LinearLayout
+                    android:id="@+id/show_system_row"
+                    style="@style/SettingsRow">
+
+                    <LinearLayout style="@style/SettingsRowText">
+
+                        <TextView
+                            style="@style/SettingsRowTitle"
+                            android:text="@string/show_system_apps" />
+
+                        <TextView
+                            style="@style/SettingsRowSummary"
+                            android:text="@string/settings_show_system_note" />
+                    </LinearLayout>
+
+                    <Switch
+                        android:id="@+id/show_system"
+                        style="@style/SettingsSwitch"
+                        android:contentDescription="@string/show_system_apps" />
+                </LinearLayout>
+            </LinearLayout>
+
             <!-- Blocked traffic log -->
             <TextView
                 style="@style/SettingsSection"

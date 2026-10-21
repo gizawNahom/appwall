@@ -54,6 +54,7 @@ class SettingsActivity : Activity() {
 
         // Blocked traffic log
         bindSwitch(R.id.logging_row, R.id.logging) { settings.setLoggingEnabled(it) }
+        bindSwitch(R.id.show_system_row, R.id.show_system) { settings.setShowSystemApps(it) }
         retentionSegments.forEach { (id, days) ->
             findViewById<View>(id).setOnClickListener {
                 settings.setLogRetentionDays(days)
@@ -104,11 +105,12 @@ class SettingsActivity : Activity() {
 
     private fun render() {
         val status = appWall.firewallStatus.status
-        val state = settingsState(settings.policy, settings.logSettings, status.alwaysOn, appWall.anotherVpnActive())
+        val state = settingsState(settings.policy, settings.logSettings, status.alwaysOn, appWall.anotherVpnActive(), settings.screenPrefs)
         rendering = true
         findViewById<Switch>(R.id.start_on_boot).isChecked = state.startOnBoot
         findViewById<RadioGroup>(R.id.new_app_mode).check(newAppModes.first { it.second == state.newAppMode }.first)
         findViewById<Switch>(R.id.logging).isChecked = state.loggingEnabled
+        findViewById<Switch>(R.id.show_system).isChecked = state.showSystemApps
         retentionSegments.forEach { (id, days) -> findViewById<View>(id).isSelected = days == state.retentionDays }
         rendering = false
 

@@ -66,8 +66,8 @@
     <string name="details_allowed">Allowed. AppWall only sees traffic from blocked apps, so nothing is logged while it\'s allowed.</string>
     <string name="details_full_log">Full log</string>
     <plurals name="undo_blocked_n">
-        <item quantity="one">%d app blocked</item>
-        <item quantity="other">%d apps blocked</item>
+        <item quantity="one">%d app can’t use the internet</item>
+        <item quantity="other">%d apps can’t use the internet</item>
     </plurals>
 
     <!-- Block-an-app picker -->
@@ -86,8 +86,8 @@
     <string name="picker_row_selected">%1$s, selected. Tap to unselect.</string>
     <string name="picker_empty">No allowed apps here.</string>
     <string name="picker_empty_recent">You haven\'t installed any apps in the last 7 days.</string>
-    <string name="undo_blocked">%1$s blocked</string>
-    <string name="undo_allowed">%1$s allowed</string>
+    <string name="undo_blocked">%1$s can’t use the internet</string>
+    <string name="undo_allowed">%1$s can use the internet</string>
     <string name="block_app_named">Block %1$s</string>
     <string name="state_blocked">BLOCKED</string>
     <string name="search_all_hint">Search all apps</string>
@@ -95,11 +95,19 @@
     <string name="search_clear">Clear search</string>
     <string name="search_prompt">Type an app\'s name or package to find it, blocked or not.</string>
     <string name="allow_app">Allow %1$s</string>
-    <plurals name="row_blocked_description">
-        <item quantity="one">%1$s, blocked, %2$d attempt today. Tap for details.</item>
-        <item quantity="other">%1$s, blocked, %2$d attempts today. Tap for details.</item>
-    </plurals>
-    <string name="row_allowed_description">%1$s, allowed. Tap for details.</string>
+    <string name="row_blocked_description">%1$s, blocked: no internet. Double-tap to open its log.</string>
+    <string name="row_allowed_description">%1$s, allowed. Double-tap to open its log.</string>
+    <string name="row_no_internet">No internet</string>
+    <string name="row_part_of_android">Part of Android · %1$s</string>
+    <string name="unblock_app">Unblock %1$s</string>
+    <string name="section_blocked">BLOCKED</string>
+    <string name="section_allowed">ALLOWED</string>
+    <string name="section_heading">%1$s · %2$d</string>
+    <string name="wall_off">Wall is off</string>
+    <string name="card_last_blocked">%1$s · last blocked %2$s</string>
+    <string name="card_none">No apps blocked. Tap Block on any app to cut its internet.</string>
+    <string name="card_off">Blocked apps can use the internet until you turn it back on.</string>
+    <string name="undo_wall_off">Wall is off</string>
     <string name="empty_blocked">Nothing is behind the wall yet. Tap \"Block an app\" to add one.</string>
     <string name="empty_allowed">Every app is blocked.</string>
     <string name="empty_search">No apps match your search.</string>
@@ -136,6 +144,8 @@
     <string name="settings_new_app_allow">Allow silently</string>
     <string name="settings_new_app_block">Block automatically</string>
     <string name="settings_new_app_note">Only works while the wall is up.</string>
+    <string name="settings_section_apps">App list</string>
+    <string name="settings_show_system_note">Background parts of Android, left off the list unless you need them. Search finds them either way.</string>
     <string name="settings_section_log">Blocked traffic log</string>
     <string name="settings_logging_note">Blocked apps stay blocked either way.</string>
     <string name="settings_open_log">Open the log</string>
@@ -158,6 +168,7 @@
     <string name="new_app_dialog_title">%1$s was just installed</string>
     <string name="new_app_dialog_text">It can access the internet. Block it?</string>
     <string name="log_title">Blocked traffic</string>
+    <string name="open_log">Blocked traffic log</string>
     <string name="log_clear">Clear</string>
     <string name="log_clear_title">Clear the log?</string>
     <string name="log_clear_text">This deletes every logged try. It can\'t be undone.</string>

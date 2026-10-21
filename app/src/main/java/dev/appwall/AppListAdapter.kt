@@ -9,15 +9,13 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
 import dev.appwall.core.apps.AppEntry
-import dev.appwall.core.screens.DetailsSummary
-import dev.appwall.core.screens.HomeRow
+import dev.appwall.core.screens.HomeItem
+import dev.appwall.core.screens.HomeSection
 import dev.appwall.core.screens.HomeState
-import dev.appwall.core.screens.HomeTab
-import dev.appwall.core.screens.RowDetails
 
 /**
- * The home list. Draws what [HomeState] decided, nothing more: which rows, in what order, their
- * counts, and what the open row shows. Taps go back to the screen through [onAction].
+ * Home's one list. Draws what [HomeState] decided, nothing more: section headings, then each app
+ * with the one action that fits it. Taps go back to the screen through [onAction].
  */
 class AppListAdapter(
     private val context: Context,
@@ -25,102 +23,61 @@ class AppListAdapter(
     private val onAction: (AppEntry, Action) -> Unit,
 ) : BaseAdapter() {
 
-    /** What a button in a row asks for. TOGGLE is the quick Block/Allow button on the row itself. */
-    enum class Action { TOGGLE, ALLOW, BLOCK, FULL_LOG }
+    /** BLOCK or UNBLOCK is the row's button; OPEN is a tap on the row itself (its log). */
+    enum class Action { BLOCK, UNBLOCK, OPEN }
 
-    private var shown: List<HomeRow> = emptyList()
-    private var tab = HomeTab.BLOCKED
-    private var maxAttempts = 1
+    private var items: List<HomeItem> = emptyList()
 
     fun show(state: HomeState) {
-        shown = state.rows
-        tab = state.tab
-        maxAttempts = state.meterMax
+        items = state.items
         notifyDataSetChanged()
     }
 
-    override fun getCount() = shown.size
-    override fun getItem(position: Int) = shown[position].app
+    override fun getCount() = items.size
+    override fun getItem(position: Int) = items[position]
     override fun getItemId(position: Int) = position.toLong()
+    override fun getViewTypeCount() = 2
+    override fun getItemViewType(position: Int) = if (items[position] is HomeItem.Row) 1 else 0
+    override fun isEnabled(position: Int) = items[position] is HomeItem.Row
 
-    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-        val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.item_app, parent, false)
-        val row = shown[position]
-        val app = row.app
-        val attempts = row.attemptsToday
-        val blocked = row.blocked
-        val isExpanded = row.details != null
-        val showActivity = tab == HomeTab.BLOCKED
-
-        view.findViewById<ImageView>(R.id.app_icon).setImageDrawable(icons[app.packageName])
-        view.findViewById<TextView>(R.id.app_label).text = app.label
-        view.findViewById<TextView>(R.id.app_package).text = app.packageName
-        view.findViewById<TextView>(R.id.app_state).visibility = if (tab == HomeTab.SEARCH && blocked) View.VISIBLE else View.GONE
-        view.findViewById<MeterView>(R.id.app_meter).apply {
-            visibility = if (showActivity) View.VISIBLE else View.GONE
-            fraction = attempts.toFloat() / maxAttempts
-        }
-        view.findViewById<TextView>(R.id.app_count).apply {
-            visibility = if (showActivity) View.VISIBLE else View.GONE
-            text = attempts.toString()
-        }
-        view.findViewById<Button>(R.id.app_action).apply {
-            // The expanded details carry the same actions, so the quick button steps aside.
-            visibility = if (showActivity || isExpanded) View.GONE else View.VISIBLE
-            setText(if (blocked) R.string.allow else R.string.block)
-            contentDescription = context.getString(if (blocked) R.string.allow_app else R.string.block_app_named, app.label)
-            setOnClickListener { onAction(app, Action.TOGGLE) }
+    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+        when (val item = items[position]) {
+            is HomeItem.Heading -> heading(item, convertView, parent)
+            is HomeItem.Row -> row(item, convertView, parent)
         }
 
-        val details = view.findViewById<View>(R.id.app_details)
-        details.visibility = if (isExpanded) View.VISIBLE else View.GONE
-        row.details?.let { bindDetails(view, app, blocked, it) }
-
-        val base = when {
-            blocked -> context.resources.getQuantityString(R.plurals.row_blocked_description, attempts, app.label, attempts)
-            else -> context.getString(R.string.row_allowed_description, app.label)
-        }
-        view.contentDescription = context.getString(
-            if (isExpanded) R.string.row_expanded else R.string.row_collapsed, base,
-        )
+    private fun heading(item: HomeItem.Heading, convertView: View?, parent: ViewGroup): View {
+        val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.item_section, parent, false)
+        val label = context.getString(if (item.section == HomeSection.BLOCKED) R.string.section_blocked else R.string.section_allowed)
+        (view as TextView).text = context.getString(R.string.section_heading, label, item.count)
         return view
     }
 
-    /** Fills the open row's section: recent activity for blocked apps, and the actions that fit. */
-    private fun bindDetails(view: View, app: AppEntry, blocked: Boolean, details: RowDetails) {
-        view.findViewById<TextView>(R.id.details_summary).text = when (val summary = details.summary) {
-            DetailsSummary.Loading -> ""
-            DetailsSummary.NoAttempts -> context.getString(R.string.details_no_attempts)
-            DetailsSummary.Allowed -> context.getString(R.string.details_allowed)
-            is DetailsSummary.Activity -> context.getString(
-                R.string.details_activity,
-                TimeText.shortAgo(context, summary.lastAttempt, System.currentTimeMillis()),
-                context.resources.getQuantityString(R.plurals.details_week, summary.week, summary.week),
-            )
-        }
-        val chart = view.findViewById<SparklineView>(R.id.details_chart)
-        val hourly = details.hourly
-        chart.visibility = if (hourly != null) View.VISIBLE else View.GONE
-        view.findViewById<View>(R.id.details_chart_caption).visibility = chart.visibility
-        if (hourly != null) {
-            chart.values = hourly.toIntArray()
-            chart.contentDescription = context.getString(R.string.details_chart_description, hourly.sum())
-        }
-        view.findViewById<TextView>(R.id.details_destinations).apply {
-            visibility = if (details.topDestinations.isEmpty()) View.GONE else View.VISIBLE
-            text = buildString {
-                append(details.topDestinations.joinToString(" · "))
-                if (details.moreDestinations > 0) append(" · ").append(context.getString(R.string.details_more, details.moreDestinations))
+    private fun row(item: HomeItem.Row, convertView: View?, parent: ViewGroup): View {
+        val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.item_app, parent, false)
+        val app = item.app
+        view.findViewById<ImageView>(R.id.app_icon).setImageDrawable(icons[app.packageName])
+        view.findViewById<TextView>(R.id.app_label).text = app.label
+        view.findViewById<TextView>(R.id.app_sub).apply {
+            if (item.blocked) {
+                text = context.getString(R.string.row_no_internet)
+                setTextColor(context.getColor(R.color.blocked))
+                setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.dot_blocked, 0, 0, 0)
+            } else {
+                text = if (app.isSystem) context.getString(R.string.row_part_of_android, app.packageName) else app.packageName
+                setTextColor(context.getColor(R.color.text_secondary))
+                setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
             }
         }
-        val primary = view.findViewById<Button>(R.id.details_primary)
-        if (blocked) bindButton(primary, app, R.string.allow, Action.ALLOW) else bindButton(primary, app, R.string.block, Action.BLOCK)
-        bindButton(view.findViewById(R.id.details_log), app, R.string.details_full_log, Action.FULL_LOG, visible = details.showFullLog)
-    }
-
-    private fun bindButton(button: Button, app: AppEntry, label: Int, action: Action, visible: Boolean = true) {
-        button.visibility = if (visible) View.VISIBLE else View.GONE
-        button.setText(label)
-        button.setOnClickListener { onAction(app, action) }
+        view.findViewById<Button>(R.id.app_action).apply {
+            setText(if (item.blocked) R.string.unblock else R.string.block)
+            setTextColor(context.getColor(if (item.blocked) R.color.accent else R.color.text))
+            contentDescription = context.getString(if (item.blocked) R.string.unblock_app else R.string.block_app_named, app.label)
+            setOnClickListener { onAction(app, if (item.blocked) Action.UNBLOCK else Action.BLOCK) }
+        }
+        view.contentDescription = context.getString(
+            if (item.blocked) R.string.row_blocked_description else R.string.row_allowed_description, app.label,
+        )
+        return view
     }
 }

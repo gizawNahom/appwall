@@ -12,29 +12,19 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.text.Editable
-import android.text.SpannableString
-import android.text.Spanned
 import android.text.TextWatcher
 import android.view.View
-import android.view.inputmethod.InputMethodManager
-import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.ListView
 import android.widget.Switch
 import android.widget.TextView
 import dev.appwall.core.apps.AppEntry
-import dev.appwall.core.screens.AppActivity
 import dev.appwall.core.screens.CardLine
-import dev.appwall.core.screens.Headline
-import dev.appwall.core.screens.HomeEmpty
-import dev.appwall.core.screens.HomeLogStats
+import dev.appwall.core.screens.HomeItem
 import dev.appwall.core.screens.HomeNotice
-import dev.appwall.core.screens.HomeTab
 import dev.appwall.core.screens.homeState
-import dev.appwall.core.screens.startOfDay
 import dev.appwall.core.state.Subscription
-import java.time.ZoneId
 
 class MainActivity : Activity() {
 
@@ -43,35 +33,21 @@ class MainActivity : Activity() {
     private lateinit var firewallSwitch: Switch
     private lateinit var icons: AppIcons
     private lateinit var search: EditText
-    private var tabBeforeSearch = HomeTab.BLOCKED
 
     // The screen's inputs; render() turns them into a HomeState and draws it.
     private var apps: List<AppEntry>? = null
-    private var stats: HomeLogStats? = null
-    private var tab = HomeTab.BLOCKED
+    /** When a blocked app last tried to connect, for the card's one calm line. */
+    private var lastAttempt: Long? = null
     private var query = ""
-    /** The open (expanded) row's app, if any; it stays open across refreshes and tab switches. */
-    private var expanded: String? = null
-    private var activity: AppActivity? = null
     private var undo: (() -> Unit)? = null
     private val hideUndo = Runnable { findViewById<View>(R.id.undo_bar).visibility = View.GONE }
 
     private val handler = Handler(Looper.getMainLooper())
 
-    /** Keeps the card's numbers and the list's counts current while the screen is visible. */
-    private val statsLoader by lazy {
-        logLoader({
-            val now = System.currentTimeMillis()
-            val startOfToday = startOfDay(now, ZoneId.systemDefault())
-            val open = expanded
-            fun(log: SqlBlockLog) = HomeLogStats(
-                today = log.attemptsSince(startOfToday),
-                sparkline = log.attemptsPerBucket(now - DAY_MS, DAY_MS / SPARK_BARS, SPARK_BARS).toList(),
-                lastAttempt = log.lastAttemptTime(),
-            ) to open?.let { appActivity(log, it, now) }
-        }) { (loaded, openActivity) ->
-            stats = loaded
-            activity = openActivity
+    /** Keeps the card's "last blocked" current while the screen is visible. */
+    private val lastAttemptLoader by lazy {
+        logLoader({ fun(log: SqlBlockLog) = log.lastAttemptTime() }) { time ->
+            lastAttempt = time
             render()
         }
     }
@@ -80,7 +56,7 @@ class MainActivity : Activity() {
 
     /** PackageManager's change counter when the list was last loaded; used to spot installs/uninstalls. */
     private var packagesSequence = 0
-    private var statusSubscription: Subscription? = null
+    private val subscriptions = ArrayList<Subscription>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,16 +66,13 @@ class MainActivity : Activity() {
         findViewById<View>(R.id.open_settings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
-        findViewById<View>(R.id.open_search).setOnClickListener { enterSearch() }
-        findViewById<View>(R.id.search_back).setOnClickListener { exitSearch() }
-        findViewById<View>(R.id.search_clear).setOnClickListener { search.setText("") }
+        findViewById<View>(R.id.open_log).setOnClickListener {
+            startActivity(Intent(this, LogActivity::class.java))
+        }
         findViewById<View>(R.id.undo_button).setOnClickListener {
             undo?.invoke()
             undo = null
             hideUndo.run()
-        }
-        findViewById<View>(R.id.last_attempt_cell).setOnClickListener {
-            startActivity(Intent(this, LogActivity::class.java))
         }
 
         firewallSwitch = findViewById(R.id.firewall_switch)
@@ -111,17 +84,19 @@ class MainActivity : Activity() {
         adapter = AppListAdapter(this, icons) { app, action -> onRowAction(app, action) }
         findViewById<ListView>(R.id.app_list).apply {
             adapter = this@MainActivity.adapter
-            setOnItemClickListener { _, _, position, _ -> onAppTapped(this@MainActivity.adapter.getItem(position)) }
+            setOnItemClickListener { _, _, position, _ ->
+                (this@MainActivity.adapter.getItem(position) as? HomeItem.Row)?.let {
+                    onRowAction(it.app, AppListAdapter.Action.OPEN)
+                }
+            }
         }
-
-        findViewById<View>(R.id.tab_blocked).setOnClickListener { selectTab(HomeTab.BLOCKED) }
-        findViewById<View>(R.id.tab_allowed).setOnClickListener { selectTab(HomeTab.ALLOWED) }
         findViewById<View>(R.id.block_app).setOnClickListener {
             @Suppress("DEPRECATION")
             startActivityForResult(Intent(this, PickerActivity::class.java), REQUEST_PICK)
         }
 
         search = findViewById(R.id.search)
+        findViewById<View>(R.id.search_clear).setOnClickListener { search.setText("") }
         search.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -131,15 +106,6 @@ class MainActivity : Activity() {
                 render()
             }
         })
-
-        findViewById<CheckBox>(R.id.show_system).apply {
-            isChecked = settings.screenPrefs.showSystemApps
-            setOnCheckedChangeListener { _, show ->
-                settings.setShowSystemApps(show)
-                render()
-            }
-        }
-        selectTab(HomeTab.BLOCKED)
 
         // The service may have died (app update, killed by Android) while the firewall was on.
         if (settings.policy.enabled) {
@@ -172,25 +138,25 @@ class MainActivity : Activity() {
             .setIcon(icons[packageName])
             .setTitle(getString(R.string.new_app_dialog_title, label))
             .setMessage(R.string.new_app_dialog_text)
-            .setPositiveButton(R.string.block) { _, _ ->
-                appWall.firewall.setBlocked(listOf(packageName), true)
-                onRulesChanged()
-            }
+            .setPositiveButton(R.string.block) { _, _ -> appWall.firewall.block(listOf(packageName)) }
             .setNegativeButton(R.string.allow, null)
             .show()
     }
 
     override fun onStart() {
         super.onStart()
-        // The firewall's state changes in the service (revoked, failed, started): show it live.
-        statusSubscription = appWall.firewallStatus.changed.subscribe(::render)
-        statsLoader.start(appWall.logChanged, settings.policyChanged)
+        // The firewall's state changes in the service (revoked, failed, started), and rules change
+        // from notifications too: show both live.
+        subscriptions += appWall.firewallStatus.changed.subscribe(::render)
+        subscriptions += settings.policyChanged.subscribe(::render)
+        subscriptions += settings.screenPrefsChanged.subscribe(::render)
+        lastAttemptLoader.start(appWall.logChanged)
     }
 
     override fun onStop() {
-        statsLoader.stop()
-        statusSubscription?.unsubscribe()
-        statusSubscription = null
+        lastAttemptLoader.stop()
+        subscriptions.forEach(Subscription::unsubscribe)
+        subscriptions.clear()
         super.onStop()
     }
 
@@ -280,43 +246,33 @@ class MainActivity : Activity() {
         if (requestCode == REQUEST_NOTIFICATIONS && settings.policy.enabled) sendToService(FirewallVpnService.ACTION_APPLY)
     }
 
+    /** Turning the wall off frees every blocked app at once, so it gets an Undo like any other change. */
     private fun stopFirewall() {
         appWall.firewall.turnOff()
         render()
+        showUndo(getString(R.string.undo_wall_off)) { requestStart() }
     }
 
-    /** The running service applies rule changes itself; this just updates the screen. */
-    private fun onRulesChanged() {
-        render()
-        statsLoader.reload() // an open row's details depend on whether the app is blocked
-    }
-
-    /** A button in a row: change the app's rule (with a few seconds to undo it), or open its log. */
+    /** A row's button changes its rule (with a few seconds to undo it); a tap on the row opens its log. */
     private fun onRowAction(app: AppEntry, action: AppListAdapter.Action) {
-        val wasBlocked = settings.policy.isBlocked(app.packageName)
-        when (action) {
-            AppListAdapter.Action.FULL_LOG -> {
-                startActivity(AppLogActivity.intent(this, app.packageName))
-                return
-            }
-            AppListAdapter.Action.TOGGLE -> appWall.firewall.setBlocked(listOf(app.packageName), !wasBlocked)
-            AppListAdapter.Action.ALLOW -> appWall.firewall.setBlocked(listOf(app.packageName), false)
-            AppListAdapter.Action.BLOCK -> appWall.firewall.setBlocked(listOf(app.packageName), true)
+        if (action == AppListAdapter.Action.OPEN) {
+            startActivity(AppLogActivity.intent(this, app.packageName))
+            return
         }
-        onRulesChanged()
-        val message = getString(if (settings.policy.isBlocked(app.packageName)) R.string.undo_blocked else R.string.undo_allowed, app.label)
-        showUndo(message) {
-            appWall.firewall.setBlocked(listOf(app.packageName), wasBlocked)
-            onRulesChanged()
+        val block = action == AppListAdapter.Action.BLOCK
+        appWall.firewall.setBlocked(listOf(app.packageName), block)
+        render()
+        showUndo(getString(if (block) R.string.undo_blocked else R.string.undo_allowed, app.label)) {
+            appWall.firewall.setBlocked(listOf(app.packageName), !block)
+            render()
         }
     }
 
     /** Apps chosen in the picker: block them all, with one Undo for the lot. */
     private fun blockPicked(packages: List<String>) {
         if (packages.isEmpty()) return
-        appWall.firewall.setBlocked(packages, true)
-        onRulesChanged()
-        selectTab(HomeTab.BLOCKED)
+        appWall.firewall.block(packages)
+        render()
         val message = if (packages.size == 1) {
             val label = apps?.firstOrNull { it.packageName == packages[0] }?.label ?: packages[0]
             getString(R.string.undo_blocked, label)
@@ -324,8 +280,8 @@ class MainActivity : Activity() {
             resources.getQuantityString(R.plurals.undo_blocked_n, packages.size, packages.size)
         }
         showUndo(message) {
-            appWall.firewall.setBlocked(packages, false)
-            onRulesChanged()
+            appWall.firewall.allow(packages)
+            render()
         }
     }
 
@@ -335,64 +291,6 @@ class MainActivity : Activity() {
         findViewById<View>(R.id.undo_bar).visibility = View.VISIBLE
         handler.removeCallbacks(hideUndo)
         handler.postDelayed(hideUndo, UNDO_MS)
-    }
-
-    /** Tapping a row opens it in place to show what's known about the app; tapping again closes it. */
-    private fun onAppTapped(app: AppEntry) {
-        expanded = if (expanded == app.packageName) null else app.packageName
-        render()
-        if (expanded != null) statsLoader.reload() // reads the open row's activity
-    }
-
-    private fun selectTab(tab: HomeTab) {
-        this.tab = tab
-        val blocked = tab == HomeTab.BLOCKED
-        findViewById<View>(R.id.tab_blocked).isSelected = blocked
-        findViewById<View>(R.id.tab_allowed).isSelected = !blocked
-        findViewById<View>(R.id.column_today).visibility = if (blocked) View.VISIBLE else View.GONE
-        findViewById<View>(R.id.show_system).visibility = if (blocked) View.GONE else View.VISIBLE
-        findViewById<View>(R.id.block_app).visibility = if (blocked) View.VISIBLE else View.GONE
-        findViewById<ListView>(R.id.app_list).setSelection(0)
-        if (tab != HomeTab.SEARCH) tabBeforeSearch = tab
-        render()
-    }
-
-    /**
-     * Search covers every app, so the card and tabs step aside and one results list takes over.
-     * The back arrow, or the phone's back gesture, returns to the tab you were on.
-     */
-    private fun enterSearch() {
-        if (tab == HomeTab.SEARCH) return
-        setSearchMode(true)
-        tab = HomeTab.SEARCH
-        render()
-        search.requestFocus()
-        getSystemService(InputMethodManager::class.java).showSoftInput(search, InputMethodManager.SHOW_IMPLICIT)
-    }
-
-    private fun exitSearch() {
-        getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(search.windowToken, 0)
-        search.setText("")
-        search.clearFocus()
-        setSearchMode(false)
-        selectTab(tabBeforeSearch)
-    }
-
-    private fun setSearchMode(searching: Boolean) {
-        val normal = if (searching) View.GONE else View.VISIBLE
-        for (id in listOf(R.id.header, R.id.status_card, R.id.tabs, R.id.columns, R.id.block_app)) {
-            findViewById<View>(id).visibility = normal
-        }
-        findViewById<View>(R.id.search_bar).visibility = if (searching) View.VISIBLE else View.GONE
-        if (!searching && tab != HomeTab.BLOCKED) findViewById<View>(R.id.block_app).visibility = View.GONE
-    }
-
-    @Deprecated("Platform back handling; still delivered when no back callback is registered")
-    override fun onBackPressed() {
-        if (tab == HomeTab.SEARCH) exitSearch() else {
-            @Suppress("DEPRECATION")
-            super.onBackPressed()
-        }
     }
 
     /** Swaps the loading placeholders for the real list. */
@@ -410,22 +308,11 @@ class MainActivity : Activity() {
         startService(Intent(this, FirewallVpnService::class.java).setAction(action))
     }
 
-    /** "91 attempts stopped today", with the number in Geist Mono and the main text color. */
-    private fun withMonoNumber(text: String, number: String): CharSequence {
-        val start = text.indexOf(number)
-        if (start < 0) return text
-        return SpannableString(text).apply {
-            setSpan(FontSpan(resources.getFont(R.font.geist_mono)), start, start + number.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            setSpan(android.text.style.ForegroundColorSpan(getColor(R.color.text)), start, start + number.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-    }
-
     /** Draws the screen from its current inputs. */
     private fun render() {
         val status = appWall.firewallStatus.status
         val state = homeState(
-            apps, settings.policy, settings.screenPrefs.showSystemApps, status, appWall.anotherVpnActive(), stats, tab, query,
-            expanded, activity,
+            apps, settings.policy, settings.screenPrefs.showSystemApps, status, appWall.anotherVpnActive(), lastAttempt, query,
         )
         adapter.show(state)
 
@@ -435,21 +322,28 @@ class MainActivity : Activity() {
 
         // The card says what the firewall is actually doing.
         findViewById<ImageView>(R.id.status_dot).setImageLevel(if (state.running) 1 else 0)
-        findViewById<TextView>(R.id.wall_state).setText(if (state.running) R.string.wall_up else R.string.wall_down)
-        findViewById<TextView>(R.id.headline).text = when (val headline = state.headline) {
-            Headline.Down -> getString(R.string.headline_down)
-            Headline.NothingBlocked -> getString(R.string.headline_none)
-            is Headline.Blocking -> resources.getQuantityString(R.plurals.headline_blocked, headline.apps, headline.apps)
-        }
-        findViewById<TextView>(R.id.attempts_today).text = when (val line = state.cardLine) {
-            is CardLine.AttemptsToday ->
-                withMonoNumber(resources.getQuantityString(R.plurals.attempts_today, line.attempts, line.attempts), line.attempts.toString())
-            CardLine.OtherVpn -> getString(R.string.status_other_vpn_short)
-            CardLine.Failed -> getString(R.string.status_off_failed)
-            CardLine.Revoked -> getString(R.string.status_off_revoked)
-            CardLine.NoPermission -> getString(R.string.status_off_no_permission)
-            CardLine.SettingsUnreadable -> getString(R.string.status_off_settings)
-            is CardLine.TurnOnToBlock -> resources.getQuantityString(R.plurals.turn_on_to_block, line.apps, line.apps)
+        findViewById<TextView>(R.id.wall_state).setText(if (state.running) R.string.wall_up else R.string.wall_off)
+        val line = state.cardLine
+        findViewById<TextView>(R.id.status_line).apply {
+            text = when (line) {
+                is CardLine.Blocking -> {
+                    val blocked = resources.getQuantityString(R.plurals.headline_blocked, line.apps, line.apps)
+                    val last = line.lastAttempt
+                    when {
+                        line.apps == 0 -> getString(R.string.card_none)
+                        last == null -> blocked
+                        else -> getString(R.string.card_last_blocked, blocked, TimeText.ago(this@MainActivity, last))
+                    }
+                }
+                CardLine.OtherVpn -> getString(R.string.status_other_vpn_short)
+                CardLine.Failed -> getString(R.string.status_off_failed)
+                CardLine.Revoked -> getString(R.string.status_off_revoked)
+                CardLine.NoPermission -> getString(R.string.status_off_no_permission)
+                CardLine.SettingsUnreadable -> getString(R.string.status_off_settings)
+                CardLine.Off -> getString(R.string.card_off)
+            }
+            // While off, blocked apps are online: that's worth the coral.
+            setTextColor(getColor(if (line is CardLine.Blocking) R.color.text_secondary else R.color.blocked))
         }
         findViewById<TextView>(R.id.health_notice).apply {
             visibility = if (state.notices.isEmpty()) View.GONE else View.VISIBLE
@@ -464,43 +358,8 @@ class MainActivity : Activity() {
             // Coral only for a real problem; the others are just worth knowing.
             setTextColor(getColor(if (HomeNotice.LogUnavailable in state.notices) R.color.blocked else R.color.text_secondary))
         }
-        findViewById<SparklineView>(R.id.sparkline).apply {
-            values = state.sparkline.toIntArray()
-            contentDescription = getString(R.string.sparkline_description)
-        }
-        findViewById<TextView>(R.id.last_attempt).text = TimeText.shortAgo(this, state.lastAttempt, System.currentTimeMillis())
-        findViewById<TextView>(R.id.allowed_count).text = state.allowedCount?.toString() ?: "—"
-        findViewById<TextView>(R.id.tab_blocked).text = tabLabel(R.string.tab_blocked, state.blockedCount)
-        findViewById<TextView>(R.id.tab_allowed).text = tabLabel(R.string.tab_allowed, state.allowedCount)
-
-        findViewById<TextView>(R.id.list_empty).apply {
-            visibility = if (state.empty == HomeEmpty.NONE) View.GONE else View.VISIBLE
-            when (state.empty) {
-                HomeEmpty.NONE -> Unit
-                HomeEmpty.SEARCH_PROMPT -> setText(R.string.search_prompt)
-                HomeEmpty.NO_MATCH -> setText(R.string.empty_search)
-                HomeEmpty.NO_BLOCKED -> setText(R.string.empty_blocked)
-                HomeEmpty.NO_ALLOWED -> setText(R.string.empty_allowed)
-            }
-        }
+        findViewById<View>(R.id.list_empty).visibility = if (state.noMatch) View.VISIBLE else View.GONE
     }
-
-    /** The open row's recent activity; runs on the database thread. */
-    private fun appActivity(log: SqlBlockLog, packageName: String, now: Long): AppActivity {
-        val (top, total) = log.topDestinations(packageName, now - WEEK_MS, 3)
-        return AppActivity(
-            packageName = packageName,
-            lastAttempt = log.lastAttemptTime(packageName),
-            week = log.attemptsSince(now - WEEK_MS)[packageName] ?: 0,
-            hourly = log.attemptsPerBucket(now - DAY_MS, HOUR_MS, 24, packageName).toList(),
-            topDestinations = top,
-            destinationCount = total,
-        )
-    }
-
-    /** "Blocked 5", with the count in Geist Mono, secondary color. */
-    private fun tabLabel(label: Int, count: Int?): CharSequence =
-        if (count == null) getString(label) else FontSpan.labelWithCount(this, getString(label), count)
 
     companion object {
         /** Package name of a just-installed app to ask about; set by the "New app" notification. */
@@ -509,10 +368,6 @@ class MainActivity : Activity() {
         private const val REQUEST_NOTIFICATIONS = 2
         private const val REQUEST_PICK = 3
         private const val UNDO_MS = 5000L
-        private const val HOUR_MS = 60 * 60 * 1000L
-        private const val DAY_MS = 24 * HOUR_MS
-        private const val WEEK_MS = 7 * DAY_MS
-        private const val SPARK_BARS = 12 // two-hour bars over the last day
         private const val INSTANT_REFUSAL_MS = 700L
     }
 }
