@@ -60,10 +60,7 @@ class AppLogActivity : Activity() {
             visibility = if (pkg == null) View.GONE else View.VISIBLE
             setOnClickListener {
                 if (pkg == null) return@setOnClickListener
-                settings.setBlocked(listOf(pkg), !settings.policy.isBlocked(pkg))
-                if (settings.policy.enabled) {
-                    startService(Intent(this@AppLogActivity, FirewallVpnService::class.java).setAction(FirewallVpnService.ACTION_APPLY))
-                }
+                appWall.firewall.setBlocked(listOf(pkg), !settings.policy.isBlocked(pkg))
                 updateState(label)
             }
         }

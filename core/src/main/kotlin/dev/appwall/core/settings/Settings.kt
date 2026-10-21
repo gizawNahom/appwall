@@ -84,6 +84,12 @@ interface ScreenPrefsWriter {
     fun setShowSystemApps(show: Boolean)
 }
 
+/**
+ * Everything about settings except changing the firewall policy, which goes through
+ * [dev.appwall.core.firewall.FirewallCommands] so a change is never saved but not applied.
+ */
+interface ScreenSettings : FirewallPolicyReader, LogSettingsReader, LogSettingsWriter, ScreenPrefsReader, ScreenPrefsWriter
+
 /** Where settings are kept: a flat file of keys and values (on Android, SharedPreferences). */
 interface KeyValueStore {
     fun all(): Map<String, Any?>
@@ -96,8 +102,7 @@ interface KeyValueStore {
  * date by the writers, so they're cheap enough for any thread to read often. Each write call
  * saves once and fires its kind's signal once.
  */
-class StoredSettings(private val store: KeyValueStore, newSignal: () -> ChangeSignal) :
-    FirewallPolicyReader, FirewallPolicyWriter, LogSettingsReader, LogSettingsWriter, ScreenPrefsReader, ScreenPrefsWriter {
+class StoredSettings(private val store: KeyValueStore, newSignal: () -> ChangeSignal) : ScreenSettings, FirewallPolicyWriter {
 
     override val policyChanged = newSignal()
     override val logSettingsChanged = newSignal()

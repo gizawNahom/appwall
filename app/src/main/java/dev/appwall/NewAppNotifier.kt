@@ -25,8 +25,8 @@ object NewAppNotifier {
     // Each new app's notification is told apart by its package name (the notification tag).
     private const val NOTIFICATION_ID = 2
 
-    /** Returns true if the block rules changed (the app was blocked automatically). */
-    fun onInstalled(context: Context, packageName: String): Boolean {
+    /** Asks about, blocks or ignores a newly installed app, as the new-app mode says. */
+    fun onInstalled(context: Context, packageName: String) {
         val settings = context.appWall.settings
         val pm = context.packageManager
         val info = try {
@@ -40,11 +40,11 @@ object NewAppNotifier {
             alreadyBlocked = settings.policy.isBlocked(packageName),
             usesInternet = info?.let { it.requestedPermissions?.contains(Manifest.permission.INTERNET) == true },
         )
-        if (decision == NewAppDecision.IGNORE) return false
+        if (decision == NewAppDecision.IGNORE) return
         val label = info?.applicationInfo?.loadLabel(pm)?.toString() ?: packageName
 
         if (decision == NewAppDecision.AUTO_BLOCK) {
-            settings.setBlocked(listOf(packageName), true)
+            context.appWall.firewall.block(listOf(packageName))
             post(
                 context, packageName,
                 title = context.getString(R.string.new_app_blocked_title, label),
@@ -52,7 +52,7 @@ object NewAppNotifier {
                 openIntent = Intent(context, MainActivity::class.java),
                 actions = listOf(action(context, packageName, FirewallVpnService.ACTION_ALLOW_NEW_APP, R.string.unblock)),
             )
-            return true
+            return
         }
 
         // Tapping the notification itself opens AppWall straight into a Block/Allow dialog for this app.
@@ -70,7 +70,6 @@ object NewAppNotifier {
                 action(context, packageName, FirewallVpnService.ACTION_ALLOW_NEW_APP, R.string.allow),
             ),
         )
-        return false
     }
 
     private fun post(

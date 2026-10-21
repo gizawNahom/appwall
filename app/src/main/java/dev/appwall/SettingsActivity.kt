@@ -27,7 +27,7 @@ class SettingsActivity : Activity() {
         findViewById<View>(R.id.settings_back).setOnClickListener { finish() }
 
         // Firewall
-        bindSwitch(R.id.start_on_boot_row, R.id.start_on_boot, settings.policy.startOnBoot) { settings.setStartOnBoot(it) }
+        bindSwitch(R.id.start_on_boot_row, R.id.start_on_boot, settings.policy.startOnBoot) { appWall.firewall.setStartOnBoot(it) }
         // Apps can't turn on Always-on VPN themselves, and Android has no link to one VPN's own
         // page, only to the list of VPNs. So explain the steps first, then open that list.
         findViewById<View>(R.id.always_on).setOnClickListener {
@@ -49,7 +49,7 @@ class SettingsActivity : Activity() {
                 }
             )
             setOnCheckedChangeListener { _, id ->
-                settings.setNewAppMode(
+                appWall.firewall.setNewAppMode(
                     when (id) {
                         R.id.new_app_allow -> NewAppMode.ALLOW
                         R.id.new_app_block -> NewAppMode.BLOCK

@@ -128,7 +128,7 @@ class MainActivity : Activity() {
 
         // The service may have died (app update, killed by Android) while the firewall was on.
         if (settings.policy.enabled) {
-            if (VpnService.prepare(this) == null) sendToService(FirewallVpnService.ACTION_APPLY) else settings.setEnabled(false)
+            if (VpnService.prepare(this) == null) appWall.firewall.ensureRunning() else appWall.firewall.turnOff()
         }
         if (settings.policy.enabled) requestNotificationPermission()
 
@@ -158,7 +158,7 @@ class MainActivity : Activity() {
             .setTitle(getString(R.string.new_app_dialog_title, label))
             .setMessage(R.string.new_app_dialog_text)
             .setPositiveButton(R.string.block) { _, _ ->
-                settings.setBlocked(listOf(packageName), true)
+                appWall.firewall.setBlocked(listOf(packageName), true)
                 onRulesChanged()
             }
             .setNegativeButton(R.string.allow, null)
@@ -246,8 +246,7 @@ class MainActivity : Activity() {
     }
 
     private fun startFirewall() {
-        settings.setEnabled(true)
-        sendToService(FirewallVpnService.ACTION_APPLY)
+        appWall.firewall.turnOn()
         refreshState()
         requestNotificationPermission()
     }
@@ -268,13 +267,12 @@ class MainActivity : Activity() {
     }
 
     private fun stopFirewall() {
-        settings.setEnabled(false)
-        sendToService(FirewallVpnService.ACTION_STOP)
+        appWall.firewall.turnOff()
         refreshState()
     }
 
+    /** The running service applies rule changes itself; this just updates the screen. */
     private fun onRulesChanged() {
-        if (settings.policy.enabled) sendToService(FirewallVpnService.ACTION_APPLY)
         adapter.refresh()
         refreshState()
     }
@@ -287,14 +285,14 @@ class MainActivity : Activity() {
                 startActivity(AppLogActivity.intent(this, app.packageName))
                 return
             }
-            AppListAdapter.Action.TOGGLE -> settings.setBlocked(listOf(app.packageName), !wasBlocked)
-            AppListAdapter.Action.ALLOW -> settings.setBlocked(listOf(app.packageName), false)
-            AppListAdapter.Action.BLOCK -> settings.setBlocked(listOf(app.packageName), true)
+            AppListAdapter.Action.TOGGLE -> appWall.firewall.setBlocked(listOf(app.packageName), !wasBlocked)
+            AppListAdapter.Action.ALLOW -> appWall.firewall.setBlocked(listOf(app.packageName), false)
+            AppListAdapter.Action.BLOCK -> appWall.firewall.setBlocked(listOf(app.packageName), true)
         }
         onRulesChanged()
         val message = getString(if (settings.policy.isBlocked(app.packageName)) R.string.undo_blocked else R.string.undo_allowed, app.label)
         showUndo(message) {
-            settings.setBlocked(listOf(app.packageName), wasBlocked)
+            appWall.firewall.setBlocked(listOf(app.packageName), wasBlocked)
             onRulesChanged()
         }
     }
@@ -302,7 +300,7 @@ class MainActivity : Activity() {
     /** Apps chosen in the picker: block them all, with one Undo for the lot. */
     private fun blockPicked(packages: List<String>) {
         if (packages.isEmpty()) return
-        settings.setBlocked(packages, true)
+        appWall.firewall.setBlocked(packages, true)
         onRulesChanged()
         selectTab(AppListAdapter.Tab.BLOCKED)
         val message = if (packages.size == 1) {
@@ -312,7 +310,7 @@ class MainActivity : Activity() {
             resources.getQuantityString(R.plurals.undo_blocked_n, packages.size, packages.size)
         }
         showUndo(message) {
-            settings.setBlocked(packages, false)
+            appWall.firewall.setBlocked(packages, false)
             onRulesChanged()
         }
     }

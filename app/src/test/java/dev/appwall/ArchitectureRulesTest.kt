@@ -63,6 +63,17 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    fun onlyTheCommandsAndTheServiceChangeThePolicy() {
+        // Step 10b: screens and notifications go through FirewallCommands, so a rule is never
+        // saved but not applied. The service writes too (off on revoke, the notification buttons).
+        val writers = sources.filter { it.readText().contains(Regex("""policyWriter|FirewallPolicyWriter""")) }
+        assertEquals(listOf("AppWallApplication.kt", "FirewallVpnService.kt"), writers.map { it.name }.sorted())
+        val applies = sources.filter { it.readText().contains("ACTION_APPLY") }.map { it.name }.sorted()
+        // Left: starting the service (commands, boot), and re-posting its notification once allowed.
+        assertEquals(listOf("AppWallApplication.kt", "FirewallVpnService.kt", "MainActivity.kt", "StartupReceiver.kt"), applies)
+    }
+
+    @Test
     fun sourcesWereFound() {
         // Guards the rules above against passing vacuously if the source path is wrong.
         assertEquals(true, sources.any { it.name == "MainActivity.kt" })

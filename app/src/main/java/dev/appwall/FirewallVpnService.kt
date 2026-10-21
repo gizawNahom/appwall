@@ -25,6 +25,7 @@ import dev.appwall.core.state.AlwaysOn
 import dev.appwall.core.state.FirewallState
 import dev.appwall.core.state.FirewallStatus
 import dev.appwall.core.state.OffReason
+import dev.appwall.core.state.Subscription
 import dev.appwall.core.tunnel.TunnelSession
 
 /**
@@ -43,6 +44,10 @@ class FirewallVpnService : VpnService() {
     /** Where this service says whether the firewall runs. Nothing else publishes to it. */
     private val status get() = appWall.firewallStatus
 
+    /** The blocked apps the current tunnel was built for; a policy change re-applies only if they differ. */
+    private var appliedBlocked: Set<String>? = null
+    private var policySubscription: Subscription? = null
+
     /** When the session was restarted after stopping unexpectedly (elapsed ms), for the per-minute cap. */
     private val sessionRestarts = ArrayDeque<Long>()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -55,7 +60,7 @@ class FirewallVpnService : VpnService() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return // an update, not a new app
             val packageName = intent.data?.schemeSpecificPart ?: return
-            if (NewAppNotifier.onInstalled(context, packageName)) applyRules()
+            NewAppNotifier.onInstalled(context, packageName) // an auto-block arrives as a policy change
         }
     }
 
@@ -75,6 +80,8 @@ class FirewallVpnService : VpnService() {
             onSkipped = { count, error -> if (count % 100 == 1) Log.w(TAG, "Skipped a packet ($count so far)", error) },
         )
         session.start()
+        // Rule changes from screens and notifications: saved by FirewallCommands, applied here.
+        policySubscription = settings.policyChanged.subscribe(::onPolicyChanged)
         val filter = IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply { addDataScheme("package") }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(installReceiver, filter, RECEIVER_NOT_EXPORTED)
@@ -102,10 +109,19 @@ class FirewallVpnService : VpnService() {
             }
         }
         // ACTION_APPLY from the UI, or a start by the system (e.g. Always-on VPN).
-        appWall.settings.setEnabled(true)
+        if (!appWall.settings.policy.enabled) appWall.policyWriter.setEnabled(true)
         if (!status.status.running) status.publish(FirewallStatus(FirewallState.Starting))
         applyRules()
         return START_STICKY
+    }
+
+    /**
+     * The policy was saved. Re-apply it if the firewall is running and the blocked apps differ from
+     * what the tunnel was built for; repeats, and this service's own writes, are no-ops.
+     */
+    private fun onPolicyChanged() {
+        val policy = appWall.settings.policy
+        if (status.status.running && policy.enabled && policy.blocked != appliedBlocked) applyRules()
     }
 
     /** (Re)builds the tunnel from the current rules. Safe to call while already running. */
@@ -121,6 +137,8 @@ class FirewallVpnService : VpnService() {
             .addDnsServer(DNS_SERVER)
 
         val blocked = appWall.settings.policy.blocked
+        appliedBlocked = blocked
+        Log.i(TAG, "Applying rules: ${blocked.size} blocked")
         session.blocked = blocked
         val plan = tunnelPlan(blocked, ::isInstalled)
         var routed = 0
@@ -148,7 +166,7 @@ class FirewallVpnService : VpnService() {
         if (newTunnel == null) {
             // VPN permission was revoked or never granted. If we were started at boot with
             // startForegroundService(), Android insists we go foreground first, even to quit.
-            appWall.settings.setEnabled(false)
+            appWall.policyWriter.setEnabled(false)
             status.publish(FirewallStatus(FirewallState.Off(OffReason.NO_PERMISSION)))
             closeTunnel()
             showStatus(0)
@@ -196,7 +214,7 @@ class FirewallVpnService : VpnService() {
             return
         }
         Log.e(TAG, "Tunnel session keeps stopping; turning the firewall off")
-        appWall.settings.setEnabled(false)
+        appWall.policyWriter.setEnabled(false)
         status.publish(FirewallStatus(FirewallState.Off(OffReason.TUNNEL_FAILED)))
         closeTunnel()
         showStopped()
@@ -274,22 +292,24 @@ class FirewallVpnService : VpnService() {
     private fun handleNewAppChoice(intent: Intent) {
         val packageName = intent.data?.schemeSpecificPart ?: return
         NewAppNotifier.cancel(this, packageName)
-        val settings = appWall.settings
         // Allow also unblocks: it's the Unblock button when new apps are blocked automatically.
-        settings.setBlocked(listOf(packageName), intent.action == ACTION_BLOCK_NEW_APP)
+        // Written here, not through FirewallCommands: a button may have started this service from
+        // the background, where it can't start itself again.
+        appWall.policyWriter.setBlocked(listOf(packageName), intent.action == ACTION_BLOCK_NEW_APP)
         // The button may be tapped after the firewall was turned off; then just save the rule.
-        if (settings.policy.enabled) applyRules() else stopSelf()
+        if (appWall.settings.policy.enabled) applyRules() else stopSelf()
     }
 
     override fun onRevoke() {
         // The user turned us off from system settings, or another VPN app took over.
-        appWall.settings.setEnabled(false)
+        appWall.policyWriter.setEnabled(false)
         status.publish(FirewallStatus(FirewallState.Off(OffReason.REVOKED)))
         closeTunnel()
         stopSelf()
     }
 
     override fun onDestroy() {
+        policySubscription?.unsubscribe()
         status.stopped(OffReason.TURNED_OFF)
         unregisterReceiver(installReceiver)
         session.shutdown() // closes the tunnel and ends the session's thread

@@ -3,12 +3,16 @@ package dev.appwall
 import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import dev.appwall.core.log.TryQueue
+import dev.appwall.core.firewall.FirewallCommands
+import dev.appwall.core.settings.FirewallPolicyWriter
+import dev.appwall.core.settings.ScreenSettings
 import dev.appwall.core.settings.StoredSettings
 import dev.appwall.core.state.ChangeSignal
 import dev.appwall.core.state.FirewallStatusBoard
@@ -48,8 +52,19 @@ class AppWallApplication : Application() {
     lateinit var tries: TryQueue
         private set
 
-    /** The firewall policy, log settings and screen preferences, as snapshots kept current by their writers. */
-    lateinit var settings: StoredSettings
+    private lateinit var storedSettings: StoredSettings
+
+    /**
+     * The firewall policy, log settings and screen preferences, as snapshots kept current by their
+     * writers. Changing the policy goes through [firewall] instead.
+     */
+    val settings: ScreenSettings get() = storedSettings
+
+    /** Writes the firewall policy directly. Only the service and [firewall] use it. */
+    val policyWriter: FirewallPolicyWriter get() = storedSettings
+
+    /** Blocking, allowing, on and off: saved, then applied by the running service. */
+    lateinit var firewall: FirewallCommands
         private set
 
     /** Installed apps, loaded off the UI thread and remembered between screens. */
@@ -63,7 +78,7 @@ class AppWallApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         db = Executors.newSingleThreadScheduledExecutor { Thread(it, "appwall-db").also { thread -> dbThread = thread } }
-        settings = StoredSettings(PrefsStore(this)) { ChangeSignal(MainThreadScheduler) }
+        storedSettings = StoredSettings(PrefsStore(this)) { ChangeSignal(MainThreadScheduler) }
         logChanged = ChangeSignal(MainThreadScheduler)
         log = SqlBlockLog(
             AndroidSqlDb(this, SqlBlockLog.FILE, SqlBlockLog.VERSION, SqlBlockLog::create),
@@ -74,6 +89,16 @@ class AppWallApplication : Application() {
         tries = TryQueue { db.schedule(::writeTries, 1, TimeUnit.SECONDS) }
         apps = InstalledAppsRepository(this, namedExecutor("appwall-apps"))
         firewallStatus = FirewallStatusBoard(ChangeSignal(MainThreadScheduler))
+        firewall = FirewallCommands(
+            storedSettings, storedSettings,
+            isRunning = { firewallStatus.status.running },
+            startService = { sendToFirewall(FirewallVpnService.ACTION_APPLY) },
+            stopService = { sendToFirewall(FirewallVpnService.ACTION_STOP) },
+        )
+    }
+
+    private fun sendToFirewall(action: String) {
+        startService(Intent(this, FirewallVpnService::class.java).setAction(action))
     }
 
     /** On the database thread: writes the queued tries as one batch. */
