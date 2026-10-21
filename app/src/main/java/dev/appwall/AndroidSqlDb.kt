@@ -27,6 +27,7 @@ class AndroidSqlDb(
     override fun execute(sql: String, args: List<Any?>) = db.execute(sql, args)
     override fun insert(sql: String, args: List<Any?>) = db.insert(sql, args)
     override fun <T> query(sql: String, args: List<Any?>, row: (SqlRow) -> T) = db.query(sql, args, row)
+    override fun <T> transaction(work: () -> T) = db.transaction(work)
 
     /** An open database; also what [onCreate] gets, before the helper finishes opening. */
     private class Connection(private val db: SQLiteDatabase) : SqlDb {
@@ -45,6 +46,15 @@ class AndroidSqlDb(
                 while (cursor.moveToNext()) result += row(reader)
                 result
             }
+
+        override fun <T> transaction(work: () -> T): T {
+            db.beginTransaction()
+            try {
+                return work().also { db.setTransactionSuccessful() }
+            } finally {
+                db.endTransaction()
+            }
+        }
 
         private fun SQLiteStatement.bindAll(args: List<Any?>): SQLiteStatement = apply {
             args.forEachIndexed { i, arg ->

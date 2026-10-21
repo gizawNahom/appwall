@@ -28,6 +28,8 @@ enum class AlwaysOn { UNKNOWN, OFF, ON, LOCKDOWN }
 data class FirewallStatus(
     val firewall: FirewallState = FirewallState.Off(OffReason.NOT_RUNNING),
     val alwaysOn: AlwaysOn = AlwaysOn.UNKNOWN,
+    /** Blocked tries the log had no room for (they were still blocked), since the app started. */
+    val droppedTries: Long = 0,
 ) {
     val running: Boolean get() = firewall !is FirewallState.Off
 }
@@ -35,22 +37,32 @@ data class FirewallStatus(
 /**
  * The firewall's live status, for screens to show and observe. Starts as off (not running); only
  * the firewall service publishes to it, so a screen never shows "on" from a saved setting alone.
+ * The database thread adds only the dropped-tries count.
  */
 class FirewallStatusBoard(val changed: ChangeSignal) {
     @Volatile
     var status = FirewallStatus()
         private set
 
-    fun publish(status: FirewallStatus) {
-        if (status == this.status) return
-        this.status = status
-        changed.notifyChanged()
-    }
+    /** The service's view of the firewall; [FirewallStatus.droppedTries] is kept, not replaced. */
+    fun publish(status: FirewallStatus) = update { status.copy(droppedTries = it.droppedTries) }
 
     /** The service stopped: off for [reason], unless it already said why. Always-on is unknown again. */
-    fun stopped(reason: OffReason) {
-        val firewall = status.firewall
+    fun stopped(reason: OffReason) = update { current ->
+        val firewall = current.firewall
         val keep = firewall is FirewallState.Off && firewall.reason != OffReason.NOT_RUNNING
-        publish(FirewallStatus(if (keep) firewall else FirewallState.Off(reason), AlwaysOn.UNKNOWN))
+        FirewallStatus(if (keep) firewall else FirewallState.Off(reason), AlwaysOn.UNKNOWN, current.droppedTries)
+    }
+
+    /** From the database thread: [total] tries dropped so far for want of room in the log's queue. */
+    fun countDropped(total: Long) = update { it.copy(droppedTries = total) }
+
+    private fun update(change: (FirewallStatus) -> FirewallStatus) {
+        synchronized(this) {
+            val next = change(status)
+            if (next == status) return
+            status = next
+        }
+        changed.notifyChanged()
     }
 }

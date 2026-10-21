@@ -59,7 +59,6 @@ class SettingsActivity : Activity() {
         }
 
         // Blocked traffic log
-        val log = appWall.log
         bindSwitch(R.id.logging_row, R.id.logging, rules.loggingEnabled) { rules.loggingEnabled = it }
         val segments = listOf(R.id.retention_1 to 1, R.id.retention_7 to 7, R.id.retention_30 to 30)
         fun showRetention() = segments.forEach { (id, days) ->
@@ -68,7 +67,7 @@ class SettingsActivity : Activity() {
         segments.forEach { (id, days) ->
             findViewById<View>(id).setOnClickListener {
                 rules.logRetentionDays = days
-                appWall.db.execute { log.prune() }
+                onDb({ it.prune() }) {}
                 showRetention()
             }
         }

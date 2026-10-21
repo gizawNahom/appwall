@@ -8,11 +8,14 @@ import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import dev.appwall.core.log.TryQueue
 import dev.appwall.core.state.ChangeSignal
 import dev.appwall.core.state.FirewallStatusBoard
 import dev.appwall.core.state.Scheduler
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 
 /**
  * Builds AppWall's shared objects once per process and hands them out: screens, the service and
@@ -22,14 +25,21 @@ import java.util.concurrent.Executors
 class AppWallApplication : Application() {
 
     /**
-     * The one thread for blocklog.db work from screens: queries, prune and clear, so the UI thread
-     * never waits on the disk. (The tunnel still writes on its own thread until step 8b.)
+     * The one thread for all blocklog.db work: the tunnel's tries in batches, and screens' queries,
+     * prune and clear. Neither the UI thread nor the tunnel ever waits on the disk.
      */
-    lateinit var db: ExecutorService
+    lateinit var db: ScheduledExecutorService
         private set
 
-    /** The blocked traffic log. Opening the database waits for the first query. */
+    @Volatile
+    private var dbThread: Thread? = null
+
+    /** The blocked traffic log, for the database thread only. Opening the database waits for the first use. */
     lateinit var log: SqlBlockLog
+        private set
+
+    /** Where the tunnel leaves blocked tries for the log; the database thread writes them within a second. */
+    lateinit var tries: TryQueue
         private set
 
     /** Installed apps, loaded off the UI thread and remembered between screens. */
@@ -42,11 +52,27 @@ class AppWallApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        db = namedExecutor("appwall-db")
+        db = Executors.newSingleThreadScheduledExecutor { Thread(it, "appwall-db").also { thread -> dbThread = thread } }
         val rules = Rules(this)
-        log = SqlBlockLog(AndroidSqlDb(this, SqlBlockLog.FILE, SqlBlockLog.VERSION, SqlBlockLog::create), { rules.logRetentionDays })
+        log = SqlBlockLog(
+            AndroidSqlDb(this, SqlBlockLog.FILE, SqlBlockLog.VERSION, SqlBlockLog::create),
+            retentionDays = { rules.logRetentionDays },
+            onDbThread = { Thread.currentThread() === dbThread },
+        )
+        tries = TryQueue { db.schedule(::writeTries, 1, TimeUnit.SECONDS) }
         apps = InstalledAppsRepository(this, namedExecutor("appwall-apps"))
         firewallStatus = FirewallStatusBoard(ChangeSignal(MainThreadScheduler))
+    }
+
+    /** On the database thread: writes the queued tries as one batch. */
+    private fun writeTries() {
+        try {
+            log.record(tries.drain())
+        } catch (e: Exception) {
+            // Only the log loses them; the apps stayed blocked.
+            Log.w("AppWall", "Writing blocked tries failed", e)
+        }
+        firewallStatus.countDropped(tries.droppedTries)
     }
 
     /**

@@ -69,4 +69,18 @@ class FirewallStatusBoardTest {
         assertEquals(Off(OffReason.REVOKED), board.status.firewall)
         assertEquals(1, heard) // coalesced into one delivery
     }
+
+    @Test
+    fun droppedTriesSurviveTheServicesUpdates() {
+        board.countDropped(5)
+        board.publish(FirewallStatus(On(2)))
+        assertEquals(5L, board.status.droppedTries)
+        board.stopped(OffReason.TURNED_OFF)
+        assertEquals(5L, board.status.droppedTries)
+        scheduler.advance()
+        assertEquals(1, heard)
+        board.countDropped(5)
+        scheduler.advance()
+        assertEquals(1, heard) // an unchanged count is quiet
+    }
 }

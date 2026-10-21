@@ -61,17 +61,17 @@ class FirewallVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
-        val log = appWall.log
+        val tries = appWall.tries
         val rules = Rules(this)
         session = TunnelSession(
             owners = ConnectivityOwners(this),
             loggingEnabled = { rules.loggingEnabled },
-            onTry = { owner, packet -> log.record(owner, packet) },
+            onTry = tries::offer,
             onFailure = { error ->
                 Log.e(TAG, "Tunnel session stopped", error)
                 mainHandler.post(::onSessionFailed)
             },
-            // Logged now and then, not per packet: a broken log could fail on every one.
+            // Logged now and then, not per packet: a broken tunnel could fail on every one.
             onSkipped = { count, error -> if (count % 100 == 1) Log.w(TAG, "Skipped a packet ($count so far)", error) },
         )
         session.start()

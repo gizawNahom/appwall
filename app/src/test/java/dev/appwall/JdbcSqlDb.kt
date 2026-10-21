@@ -34,6 +34,18 @@ class JdbcSqlDb : SqlDb, AutoCloseable {
             }
         }
 
+    override fun <T> transaction(work: () -> T): T {
+        connection.autoCommit = false
+        try {
+            return work().also { connection.commit() }
+        } catch (e: Throwable) {
+            connection.rollback()
+            throw e
+        } finally {
+            connection.autoCommit = true
+        }
+    }
+
     override fun close() = connection.close()
 
     private fun PreparedStatement.bindTyped(args: List<Any?>): PreparedStatement = apply {

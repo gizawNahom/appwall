@@ -1,6 +1,7 @@
 package dev.appwall
 
 import dev.appwall.core.log.AppSummary
+import dev.appwall.core.log.BlockedTry
 import dev.appwall.core.log.Destination
 import dev.appwall.core.net.Packet
 import dev.appwall.core.net.PacketParser
@@ -9,53 +10,91 @@ import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SqlBlockLogTest {
 
-    private val db = JdbcSqlDb().also(SqlBlockLog::create)
+    private val db = CountingDb(JdbcSqlDb().also(SqlBlockLog::create))
     private var now = START
     private var retentionDays = 7
-    private val log = SqlBlockLog(db, { retentionDays }, { now })
+    private val testThread = Thread.currentThread()
+    private val log = SqlBlockLog(db, { retentionDays }, { now }, onDbThread = { Thread.currentThread() === testThread })
 
     @After
-    fun closeDb() = db.close()
+    fun closeDb() = db.jdbc.close()
 
     // Recording
 
     @Test
+    fun aBatchIsWrittenInOneTransactionAndMerged() {
+        val tries = listOf(
+            BlockedTry(CHROME, tcp("1.2.3.4", 443), now),
+            BlockedTry(CHROME, tcp("1.2.3.4", 443), now + 10_000), // same place within the minute: merged
+            BlockedTry(OTHER, tcp("1.2.3.4", 443), now + 20_000),
+            BlockedTry(CHROME, dns("a.example"), now + 30_000),
+        )
+        log.record(tries)
+        assertEquals(1, db.transactions)
+        assertEquals(0, db.writesOutsideTransactions)
+        assertEquals(3, rows())
+        now += 30_000
+        assertEquals(listOf(1, 3), log.summaries().map { it.attempts }.sorted())
+    }
+
+    @Test
+    fun aFailedBatchLeavesNothingHalfWritten() {
+        record(CHROME, tcp("1.2.3.4", 443))
+        db.failAfterWrites = 1
+        val batch = listOf(BlockedTry(CHROME, tcp("1.2.3.4", 443), now + 1), BlockedTry(OTHER, tcp("5.6.7.8", 443), now + 2))
+        assertThrows(IllegalStateException::class.java) { log.record(batch) }
+        db.failAfterWrites = null
+        assertEquals(listOf(1), log.summaries().map { it.attempts })
+        record(OTHER, tcp("5.6.7.8", 443)) // must be inserted, not "bump" a rolled-back row
+        assertEquals(2, rows())
+    }
+
+    @Test
+    fun theLogRefusesOtherThreads() {
+        var error: Throwable? = null
+        Thread { error = runCatching { log.summaries() }.exceptionOrNull() }.apply { start(); join() }
+        assertTrue(error is IllegalStateException)
+    }
+
+    @Test
     fun repeatTriesWithinAMinuteShareARow() {
-        repeat(3) { log.record(CHROME, tcp("1.2.3.4", 443)); now += 10_000 }
+        repeat(3) { record(CHROME, tcp("1.2.3.4", 443)); now += 10_000 }
         assertEquals(1, rows())
         assertEquals(3, log.entriesFor(CHROME).single().attempts)
     }
 
     @Test
     fun aTryAfterTheRowsMinuteStartsANewRow() {
-        log.record(CHROME, tcp("1.2.3.4", 443))
+        record(CHROME, tcp("1.2.3.4", 443))
         now += 59_999
-        log.record(CHROME, tcp("1.2.3.4", 443))
+        record(CHROME, tcp("1.2.3.4", 443))
         now += 1
-        log.record(CHROME, tcp("1.2.3.4", 443))
+        record(CHROME, tcp("1.2.3.4", 443))
         assertEquals(listOf(1, 2), log.entriesFor(CHROME).map { it.attempts })
     }
 
     @Test
     fun afterClearingTriesAreRecordedAgainNotLost() {
-        log.record(CHROME, tcp("1.2.3.4", 443))
+        record(CHROME, tcp("1.2.3.4", 443))
         log.clear()
         now += 1_000
-        log.record(CHROME, tcp("1.2.3.4", 443)) // must not "bump" the deleted row
+        record(CHROME, tcp("1.2.3.4", 443)) // must not "bump" the deleted row
         assertEquals(1, log.entriesFor(CHROME).single().attempts)
     }
 
     @Test
     fun everyHundredRowsOldOnesArePruned() {
-        log.record(CHROME, tcp("9.9.9.9", 443))
+        record(CHROME, tcp("9.9.9.9", 443))
         now += 8 * DAY
-        for (i in 1..98) log.record(CHROME, tcp("1.2.3.$i", 443))
+        for (i in 1..98) record(CHROME, tcp("1.2.3.$i", 443))
         assertEquals(99, rows()) // 99 inserts: no prune yet
-        log.record(CHROME, tcp("1.2.4.1", 443)) // the 100th insert prunes
+        record(CHROME, tcp("1.2.4.1", 443)) // the 100th insert prunes
         assertEquals(99, rows())
         assertEquals(emptyList<String>(), log.destinations(CHROME).map { it.name }.filter { it == "9.9.9.9" })
     }
@@ -64,12 +103,12 @@ class SqlBlockLogTest {
 
     @Test
     fun summariesPerAppNewestFirst() {
-        log.record(CHROME, dns("a.example"))
-        log.record(CHROME, tcp("1.2.3.4", 443))
-        log.record(CHROME, tcp("1.2.3.4", 80)) // same address, other port: one place
+        record(CHROME, dns("a.example"))
+        record(CHROME, tcp("1.2.3.4", 443))
+        record(CHROME, tcp("1.2.3.4", 80)) // same address, other port: one place
         now += 1_000
-        log.record(OTHER, tcp("5.6.7.8", 443))
-        log.record(null, tcp("5.6.7.8", 443))
+        record(OTHER, tcp("5.6.7.8", 443))
+        record(null, tcp("5.6.7.8", 443))
         assertEquals(
             listOf(
                 AppSummary(OTHER, 1, 1, now),
@@ -83,7 +122,7 @@ class SqlBlockLogTest {
 
     @Test
     fun summariesLeaveOutWhatsPastRetention() {
-        log.record(CHROME, tcp("1.2.3.4", 443))
+        record(CHROME, tcp("1.2.3.4", 443))
         now += 2 * DAY
         retentionDays = 1
         assertEquals(emptyList<AppSummary>(), log.summaries())
@@ -91,11 +130,11 @@ class SqlBlockLogTest {
 
     @Test
     fun destinationsSplitLookupsFromAddressesAndRankByTries() {
-        log.record(CHROME, dns("a.example"))
-        repeat(3) { log.record(CHROME, tcp("1.2.3.4", 443)) }
-        log.record(CHROME, tcp("1.2.3.4", 80))
-        log.record(CHROME, Packet(PacketParser.ICMP, SOURCE, 0, InetAddress.getByName("1.2.3.4"), 0, null))
-        log.record(OTHER, tcp("9.9.9.9", 443))
+        record(CHROME, dns("a.example"))
+        repeat(3) { record(CHROME, tcp("1.2.3.4", 443)) }
+        record(CHROME, tcp("1.2.3.4", 80))
+        record(CHROME, Packet(PacketParser.ICMP, SOURCE, 0, InetAddress.getByName("1.2.3.4"), 0, null))
+        record(OTHER, tcp("9.9.9.9", 443))
         assertEquals(
             listOf(
                 Destination("1.2.3.4", isLookup = false, ports = listOf(80, 443), attempts = 5, lastTime = START),
@@ -107,8 +146,8 @@ class SqlBlockLogTest {
 
     @Test
     fun unattributedTriesHaveTheirOwnDestinations() {
-        log.record(null, tcp("1.2.3.4", 443))
-        log.record(CHROME, tcp("5.6.7.8", 443))
+        record(null, tcp("1.2.3.4", 443))
+        record(CHROME, tcp("5.6.7.8", 443))
         assertEquals(listOf("1.2.3.4"), log.destinations(null).map { it.name })
         assertEquals(listOf("1.2.3.4"), log.entriesFor(null).map { it.address })
     }
@@ -116,7 +155,7 @@ class SqlBlockLogTest {
     @Test
     fun entriesNewestFirstUpToTheLimit() {
         for (i in 1..5) {
-            log.record(CHROME, tcp("1.2.3.$i", 443))
+            record(CHROME, tcp("1.2.3.$i", 443))
             now += 1_000
         }
         val entries = log.entriesFor(CHROME, limit = 3)
@@ -126,22 +165,22 @@ class SqlBlockLogTest {
 
     @Test
     fun attemptsSincePerApp() {
-        log.record(CHROME, tcp("1.2.3.4", 443))
+        record(CHROME, tcp("1.2.3.4", 443))
         now += 1_000
-        log.record(CHROME, tcp("5.6.7.8", 443))
-        log.record(OTHER, tcp("5.6.7.8", 443))
+        record(CHROME, tcp("5.6.7.8", 443))
+        record(OTHER, tcp("5.6.7.8", 443))
         assertEquals(mapOf(CHROME to 1, OTHER to 1), log.attemptsSince(START + 1))
         assertEquals(mapOf(CHROME to 2, OTHER to 1), log.attemptsSince(START))
     }
 
     @Test
     fun bucketsCountTriesPerWindowOldestFirst() {
-        log.record(CHROME, tcp("1.2.3.4", 443)) // bucket 0
+        record(CHROME, tcp("1.2.3.4", 443)) // bucket 0
         now += HOUR + 1
-        log.record(CHROME, tcp("5.6.7.8", 443)) // bucket 1
-        log.record(OTHER, tcp("5.6.7.8", 443))
+        record(CHROME, tcp("5.6.7.8", 443)) // bucket 1
+        record(OTHER, tcp("5.6.7.8", 443))
         now += 20_000
-        log.record(CHROME, tcp("5.6.7.8", 443)) // bumps the bucket-1 row
+        record(CHROME, tcp("5.6.7.8", 443)) // bumps the bucket-1 row
         assertArrayEquals(intArrayOf(1, 3, 0), log.attemptsPerBucket(START, HOUR, 3))
         assertArrayEquals(intArrayOf(1, 2, 0), log.attemptsPerBucket(START, HOUR, 3, CHROME))
     }
@@ -149,18 +188,18 @@ class SqlBlockLogTest {
     @Test
     fun aMergedRowCountsInTheWindowOfItsLatestTry() {
         now = START + HOUR - 10_000
-        log.record(CHROME, tcp("1.2.3.4", 443))
+        record(CHROME, tcp("1.2.3.4", 443))
         now += 20_000 // the same row, now in the next hour
-        log.record(CHROME, tcp("1.2.3.4", 443))
+        record(CHROME, tcp("1.2.3.4", 443))
         assertArrayEquals(intArrayOf(0, 2), log.attemptsPerBucket(START, HOUR, 2))
     }
 
     @Test
     fun lastAttemptTime() {
         assertNull(log.lastAttemptTime())
-        log.record(CHROME, tcp("1.2.3.4", 443))
+        record(CHROME, tcp("1.2.3.4", 443))
         now += 5_000
-        log.record(OTHER, tcp("1.2.3.4", 443))
+        record(OTHER, tcp("1.2.3.4", 443))
         assertEquals(now, log.lastAttemptTime())
         assertEquals(START, log.lastAttemptTime(CHROME))
         assertNull(log.lastAttemptTime("not.logged"))
@@ -168,17 +207,17 @@ class SqlBlockLogTest {
 
     @Test
     fun topDestinationsAndHowManyThereAre() {
-        repeat(3) { log.record(CHROME, dns("busy.example")) }
-        repeat(2) { log.record(CHROME, tcp("1.2.3.4", 443)) }
-        log.record(CHROME, tcp("5.6.7.8", 443))
+        repeat(3) { record(CHROME, dns("busy.example")) }
+        repeat(2) { record(CHROME, tcp("1.2.3.4", 443)) }
+        record(CHROME, tcp("5.6.7.8", 443))
         assertEquals(listOf("busy.example", "1.2.3.4") to 3, log.topDestinations(CHROME, START, 2))
     }
 
     @Test
     fun pruneUsesTheCurrentRetention() {
-        log.record(CHROME, tcp("1.2.3.4", 443))
+        record(CHROME, tcp("1.2.3.4", 443))
         now += 2 * DAY
-        log.record(CHROME, tcp("5.6.7.8", 443))
+        record(CHROME, tcp("5.6.7.8", 443))
         log.prune()
         assertEquals(2, rows())
         retentionDays = 1
@@ -190,7 +229,7 @@ class SqlBlockLogTest {
 
     @Test
     fun timingAndQueryPlansWithAHundredThousandRows() {
-        db.connection.autoCommit = false
+        db.jdbc.connection.autoCommit = false
         for (i in 0 until 100_000) {
             val app = APPS[i % APPS.size]
             db.execute(
@@ -198,8 +237,8 @@ class SqlBlockLogTest {
                 listOf(START + i * 6_000L, app, "10.0.${i % 50}.${i % 200}", if (i % 3 == 0) "h${i % 300}.example" else null, 1 + i % 4),
             )
         }
-        db.connection.commit()
-        db.connection.autoCommit = true
+        db.jdbc.connection.commit()
+        db.jdbc.connection.autoCommit = true
         now = START + 100_000 * 6_000L
         retentionDays = 30
 
@@ -226,6 +265,8 @@ class SqlBlockLogTest {
         }
     }
 
+    private fun record(owner: String?, packet: Packet) = log.record(listOf(BlockedTry(owner, packet, now)))
+
     private fun rows() = db.query("SELECT COUNT(*) FROM log") { it.int(0) }.single()
 
     private fun tcp(address: String, port: Int) =
@@ -242,5 +283,39 @@ class SqlBlockLogTest {
         const val OTHER = "org.example.other"
         val APPS = listOf(CHROME, OTHER, "a.b", "c.d", "e.f")
         val SOURCE: InetAddress = InetAddress.getByName("10.111.0.1")
+    }
+}
+
+/** Counts transactions and writes outside them, and can fail a write on purpose. */
+private class CountingDb(val jdbc: JdbcSqlDb) : SqlDb by jdbc {
+    var transactions = 0
+    var writesOutsideTransactions = 0
+    /** Fail the write after this many more succeed; null = never. */
+    var failAfterWrites: Int? = null
+    private var inTransaction = false
+
+    override fun execute(sql: String, args: List<Any?>) {
+        wrote()
+        jdbc.execute(sql, args)
+    }
+
+    override fun insert(sql: String, args: List<Any?>): Long {
+        wrote()
+        return jdbc.insert(sql, args)
+    }
+
+    override fun <T> transaction(work: () -> T): T {
+        transactions++
+        inTransaction = true
+        try {
+            return jdbc.transaction(work)
+        } finally {
+            inTransaction = false
+        }
+    }
+
+    private fun wrote() {
+        if (!inTransaction) writesOutsideTransactions++
+        failAfterWrites?.let { check(it > 0) { "Failing on purpose" }; failAfterWrites = it - 1 }
     }
 }

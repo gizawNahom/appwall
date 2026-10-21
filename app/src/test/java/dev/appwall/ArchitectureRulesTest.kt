@@ -34,6 +34,9 @@ class ArchitectureRulesTest {
         // claim "on" from a saved setting; and no static back door to the service remains.
         val publishers = sources.filter { file -> file.readText().contains(Regex("""(firewallStatus|status)\.(publish|stopped)\(""")) }
         assertEquals(listOf("FirewallVpnService.kt"), publishers.map { it.name })
+        // Step 8b: the database thread adds the dropped-tries count, and only that.
+        val counters = sources.filter { it.readText().contains(".countDropped(") }
+        assertEquals(listOf("AppWallApplication.kt"), counters.map { it.name })
         val statics = sources.filter { it.readText().contains("FirewallVpnService.running") || it.readText().contains("alwaysOnStatus()") }
         assertEquals(emptyList<String>(), statics.map { it.name })
     }

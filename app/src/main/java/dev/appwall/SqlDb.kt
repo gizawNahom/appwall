@@ -15,6 +15,9 @@ interface SqlDb {
     fun insert(sql: String, args: List<Any?>): Long
 
     fun <T> query(sql: String, args: List<Any?> = emptyList(), row: (SqlRow) -> T): List<T>
+
+    /** Runs [work] as one transaction: all of its writes are kept, or (if it throws) none. */
+    fun <T> transaction(work: () -> T): T
 }
 
 /** One result row; columns by position, from 0. */
