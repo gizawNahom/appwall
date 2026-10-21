@@ -228,6 +228,69 @@ class SqlBlockLogTest {
         assertEquals(1, rows())
     }
 
+    // Schema versions
+
+    @Test
+    fun upgradingFromVersionOneKeepsEveryRowAndAddsTheIndex() {
+        JdbcSqlDb().use { old ->
+            createVersionOne(old)
+            old.execute("INSERT INTO log (time, package, protocol, address, port, host, attempts) VALUES (?, ?, 6, '1.2.3.4', 443, NULL, 3)", listOf(START, CHROME))
+            old.execute("INSERT INTO log (time, package, protocol, address, port, host, attempts) VALUES (?, NULL, 17, '10.111.0.2', 53, 'a.example', 1)", listOf(START + 1))
+            old.transaction { SqlBlockLog.upgrade(old, 1, SqlBlockLog.VERSION) }
+            assertEquals(2, old.query("SELECT COUNT(*) FROM log") { it.int(0) }.single())
+            assertEquals(listOf(4), old.query("SELECT SUM(attempts) FROM log") { it.int(0) })
+            assertEquals(setOf("log_time", "log_package_time"), indexes(old))
+        }
+    }
+
+    @Test
+    fun aFreshDatabaseMatchesAnUpgradedOne() {
+        JdbcSqlDb().use { upgraded ->
+            JdbcSqlDb().use { fresh ->
+                createVersionOne(upgraded)
+                SqlBlockLog.upgrade(upgraded, 1, SqlBlockLog.VERSION)
+                SqlBlockLog.create(fresh)
+                assertEquals(schema(fresh), schema(upgraded))
+            }
+        }
+    }
+
+    @Test
+    fun aDowngradeStartsTheLogOver() {
+        record(CHROME, tcp("1.2.3.4", 443))
+        SqlBlockLog.reset(db)
+        assertEquals(0, rows())
+        assertEquals(schema(JdbcSqlDb().also(SqlBlockLog::create)), schema(db))
+    }
+
+    @Test
+    fun perAppQueriesUseThePackageTimeIndex() {
+        for (sql in listOf(
+            "SELECT time FROM log WHERE package = ? AND time >= ? ORDER BY time DESC LIMIT 500", // entriesFor
+            "SELECT COALESCE(host, address), SUM(attempts) FROM log WHERE package = ? AND time >= ? GROUP BY 1", // destinations
+            "SELECT MAX(time) FROM log WHERE package = ?", // lastAttemptTime
+        )) {
+            val plan = db.query("EXPLAIN QUERY PLAN $sql", listOf("x", "0").take(sql.count { it == '?' })) { it.string(3) }.joinToString()
+            assertTrue("$sql: $plan", "log_package_time" in plan)
+        }
+    }
+
+    /** The schema as version 1 (the first release) created it. */
+    private fun createVersionOne(target: SqlDb) {
+        target.execute(
+            "CREATE TABLE log (_id INTEGER PRIMARY KEY, time INTEGER NOT NULL, package TEXT, " +
+                "protocol INTEGER NOT NULL, address TEXT NOT NULL, port INTEGER NOT NULL, host TEXT, " +
+                "attempts INTEGER NOT NULL)"
+        )
+        target.execute("CREATE INDEX log_time ON log (time)")
+    }
+
+    private fun indexes(target: SqlDb) =
+        target.query("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'log'") { it.string(0)!! }.toSet()
+
+    private fun schema(target: SqlDb) =
+        target.query("SELECT type, name, sql FROM sqlite_master WHERE tbl_name = 'log' ORDER BY name") { "${it.string(0)} ${it.string(1)}: ${it.string(2)}" }
+
     // How the queries scale (prints only: timings vary by machine, and a phone is slower)
 
     @Test

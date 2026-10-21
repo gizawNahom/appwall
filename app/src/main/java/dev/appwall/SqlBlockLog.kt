@@ -169,7 +169,8 @@ class SqlBlockLog(
 
     companion object {
         const val FILE = "blocklog.db"
-        const val VERSION = 1
+        /** 2: adds the (package, time) index for the per-app queries. */
+        const val VERSION = 2
         private const val DAY_MS = 24 * 60 * 60 * 1000L
 
         /** Creates the schema in a new, empty database. */
@@ -180,6 +181,24 @@ class SqlBlockLog(
                     "attempts INTEGER NOT NULL)"
             )
             db.execute("CREATE INDEX log_time ON log (time)")
+            createPackageTimeIndex(db)
         }
+
+        /** Brings a database made by an older version up to [VERSION], keeping its entries. */
+        fun upgrade(db: SqlDb, from: Int, to: Int) {
+            if (from < 2 && to >= 2) createPackageTimeIndex(db)
+        }
+
+        /**
+         * A newer version made this database (an older build was installed over it). Its schema
+         * can't be trusted here, and it's only a log: start it over rather than fail to open.
+         */
+        fun reset(db: SqlDb) {
+            db.execute("DROP TABLE IF EXISTS log")
+            create(db)
+        }
+
+        // One app's entries, newest first: AppLog, an open row on Home, and their counts.
+        private fun createPackageTimeIndex(db: SqlDb) = db.execute("CREATE INDEX log_package_time ON log (package, time)")
     }
 }

@@ -81,7 +81,7 @@ class AppWallApplication : Application() {
         storedSettings = StoredSettings(PrefsStore(this)) { ChangeSignal(MainThreadScheduler) }
         logChanged = ChangeSignal(MainThreadScheduler)
         log = SqlBlockLog(
-            AndroidSqlDb(this, SqlBlockLog.FILE, SqlBlockLog.VERSION, SqlBlockLog::create),
+            AndroidSqlDb(this, SqlBlockLog.FILE, SqlBlockLog.VERSION, SqlBlockLog::create, SqlBlockLog::upgrade, SqlBlockLog::reset),
             retentionDays = { settings.logSettings.retentionDays },
             onDbThread = { Thread.currentThread() === dbThread },
             changed = logChanged::notifyChanged,

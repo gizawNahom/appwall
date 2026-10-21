@@ -8,18 +8,22 @@ import android.database.sqlite.SQLiteStatement
 
 /**
  * [SqlDb] on Android's SQLite, for one database file. The only class that uses android.database;
- * the schema comes from [onCreate], so the SQL itself lives with the code that uses it.
+ * the schema comes from [onCreate], [onUpgrade] and [onDowngrade], so the SQL itself lives with
+ * the code that uses it. Each runs inside the helper's own transaction.
  */
 class AndroidSqlDb(
     context: Context,
     name: String,
     version: Int,
     private val onCreate: (SqlDb) -> Unit,
+    private val onUpgrade: (SqlDb, from: Int, to: Int) -> Unit,
+    private val onDowngrade: (SqlDb) -> Unit,
 ) : SqlDb {
 
     private val helper = object : SQLiteOpenHelper(context, name, null, version) {
         override fun onCreate(db: SQLiteDatabase) = onCreate(Connection(db))
-        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = onUpgrade(Connection(db), oldVersion, newVersion)
+        override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = onDowngrade(Connection(db))
     }
 
     private val db: SqlDb get() = Connection(helper.writableDatabase)
