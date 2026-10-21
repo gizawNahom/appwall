@@ -25,8 +25,6 @@ import dev.appwall.core.screens.CardLine
 import dev.appwall.core.screens.HomeItem
 import dev.appwall.core.screens.HomeNotice
 import dev.appwall.core.screens.HomeState
-import dev.appwall.core.screens.SystemAppWarning
-import dev.appwall.core.screens.joinNames
 import dev.appwall.core.screens.systemAppWarning
 import dev.appwall.core.screens.homeState
 import dev.appwall.core.state.Subscription
@@ -289,11 +287,11 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Blocks [toBlock], asking first if any of it is part of Android. */
+    /** Blocks [toBlock], asking first (in a sheet) if any of it is part of Android. */
     private fun block(toBlock: List<AppEntry>) {
         if (toBlock.isEmpty()) return
         val warning = systemAppWarning(toBlock)
-        if (warning == null) blockNow(toBlock) else warn(warning)
+        if (warning == null) blockNow(toBlock) else SystemWarningSheet.show(this, warning, ::blockNow)
     }
 
     /** Blocks them all with one Undo for the lot, and ends choosing several. */
@@ -311,41 +309,6 @@ class MainActivity : Activity() {
             appWall.firewall.allow(packages)
             render()
         }
-    }
-
-    /**
-     * Blocking part of Android can quietly break other things, so say so first. One app on its
-     * own: block it anyway, or keep it allowed. Several: block only the others (the safe choice,
-     * when there are others), block all of them anyway, or go back.
-     */
-    private fun warn(warning: SystemAppWarning) {
-        val all = warning.system + warning.others
-        val names = warning.system.map { it.label }
-        val dialog = AlertDialog.Builder(this)
-        if (all.size == 1) {
-            dialog.setTitle(getString(R.string.warn_title_one, names[0]))
-                .setMessage(getString(R.string.warn_one, names[0]))
-                .setPositiveButton(R.string.warn_block_anyway) { _, _ -> blockNow(all) }
-                .setNegativeButton(R.string.warn_keep, null)
-        } else {
-            val message = when {
-                !warning.namesInline -> getString(R.string.warn_counted, names.size) + "\n\n" + names.joinToString("\n")
-                names.size == 1 -> getString(R.string.warn_inline_one, names[0])
-                else -> getString(R.string.warn_inline_many, joinNames(names, getString(R.string.warn_and)))
-            }
-            dialog.setTitle(getString(R.string.warn_title_many, all.size))
-                .setMessage(message)
-                .setNeutralButton(getString(R.string.warn_block_all, all.size)) { _, _ -> blockNow(all) }
-                .setNegativeButton(R.string.warn_back, null)
-            if (warning.canBlockOthers) {
-                val others = warning.others.size
-                dialog.setPositiveButton(resources.getQuantityString(R.plurals.warn_block_others, others, others)) { _, _ -> blockNow(warning.others) }
-            }
-        }
-        val shown = dialog.show()
-        // Blocking part of Android anyway is the risky choice: coral, like other risky actions.
-        val risky = if (all.size == 1) AlertDialog.BUTTON_POSITIVE else AlertDialog.BUTTON_NEUTRAL
-        shown.getButton(risky)?.setTextColor(getColor(R.color.blocked))
     }
 
     private fun stopSelecting() {

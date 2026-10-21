@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Asked before blocking part of Android. One app: Keep allowed | Block anyway. Several: Block the
+    other N (the safe choice, when there are others), Block all N anyway, Back.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_sheet"
+    android:orientation="vertical"
+    android:paddingHorizontal="20dp"
+    android:paddingTop="24dp"
+    android:paddingBottom="20dp">
+
+    <TextView
+        android:id="@+id/sheet_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textAppearance="@style/TextAppearance.AppWall.Label" />
+
+    <TextView
+        android:id="@+id/sheet_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:accessibilityHeading="true"
+        android:textAppearance="@style/TextAppearance.AppWall.Title"
+        android:textSize="20sp" />
+
+    <TextView
+        android:id="@+id/sheet_body"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:lineSpacingMultiplier="1.2"
+        android:textAppearance="@style/TextAppearance.AppWall.Body1"
+        android:textColor="@color/text_secondary" />
+
+    <!-- Four or more apps are counted in the sentence and named here, in a box that scrolls. -->
+    <ScrollView
+        android:id="@+id/sheet_names_box"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_field"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/sheet_names"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:lineSpacingMultiplier="1.5"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="8dp"
+            android:textAppearance="@style/TextAppearance.AppWall.Body2" />
+    </ScrollView>
+
+    <!-- One app: side by side -->
+    <LinearLayout
+        android:id="@+id/sheet_pair"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/sheet_keep"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_outline"
+            android:stateListAnimator="@null"
+            android:text="@string/warn_keep"
+            android:textAppearance="@style/TextAppearance.AppWall.Button"
+            android:textColor="@color/text" />
+
+        <Button
+            android:id="@+id/sheet_anyway"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_button_blocked"
+            android:stateListAnimator="@null"
+            android:text="@string/warn_block_anyway"
+            android:textAppearance="@style/TextAppearance.AppWall.Button"
+            android:textColor="@color/on_blocked" />
+    </LinearLayout>
+
+    <!-- Several apps: stacked -->
+    <LinearLayout
+        android:id="@+id/sheet_stack"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/sheet_others"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/bg_button_accent"
+            android:stateListAnimator="@null"
+            android:textAppearance="@style/TextAppearance.AppWall.Button"
+            android:textColor="@color/ground" />
+
+        <Button
+            android:id="@+id/sheet_all"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_outline"
+            android:stateListAnimator="@null"
+            android:textAppearance="@style/TextAppearance.AppWall.Button"
+            android:textColor="@color/blocked" />
+
+        <Button
+            android:id="@+id/sheet_back"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="4dp"
+            android:text="@string/warn_back"
+            android:textAllCaps="false"
+            android:textAppearance="@style/TextAppearance.AppWall.Button"
+            android:textColor="@color/text_secondary" />
+    </LinearLayout>
+</LinearLayout>

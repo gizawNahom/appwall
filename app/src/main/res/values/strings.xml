@@ -85,6 +85,8 @@
     <string name="row_unselected">%1$s. Double-tap to select.</string>
 
     <!-- Before blocking something that is part of Android -->
+    <string name="warn_label_one">PART OF ANDROID</string>
+    <string name="warn_label_many">INCLUDES PART OF ANDROID</string>
     <string name="warn_title_one">Block %1$s?</string>
     <string name="warn_title_many">Block %1$d apps?</string>
     <string name="warn_one">%1$s is part of your phone. Blocking it can quietly break other apps or phone features, and it may not be obvious why. You can unblock it again at any time.</string>
