@@ -13,13 +13,20 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import dev.appwall.core.firewall.NewAppMode
-import dev.appwall.core.state.AlwaysOn
+import dev.appwall.core.screens.AlwaysOnText
+import dev.appwall.core.screens.StatusLevel
+import dev.appwall.core.screens.settingsState
 import dev.appwall.core.state.Subscription
 
+/** Settings; what it shows comes from [settingsState], and changes go to settings or commands. */
 class SettingsActivity : Activity() {
 
     private val settings get() = appWall.settings
     private var statusSubscription: Subscription? = null
+    private val retentionSegments = listOf(R.id.retention_1 to 1, R.id.retention_7 to 7, R.id.retention_30 to 30)
+    private val newAppModes = listOf(R.id.new_app_ask to NewAppMode.ASK, R.id.new_app_allow to NewAppMode.ALLOW, R.id.new_app_block to NewAppMode.BLOCK)
+    /** True while [render] sets the controls, so their listeners don't save what was just shown. */
+    private var rendering = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,7 +34,7 @@ class SettingsActivity : Activity() {
         findViewById<View>(R.id.settings_back).setOnClickListener { finish() }
 
         // Firewall
-        bindSwitch(R.id.start_on_boot_row, R.id.start_on_boot, settings.policy.startOnBoot) { appWall.firewall.setStartOnBoot(it) }
+        bindSwitch(R.id.start_on_boot_row, R.id.start_on_boot) { appWall.firewall.setStartOnBoot(it) }
         // Apps can't turn on Always-on VPN themselves, and Android has no link to one VPN's own
         // page, only to the list of VPNs. So explain the steps first, then open that list.
         findViewById<View>(R.id.always_on).setOnClickListener {
@@ -40,39 +47,20 @@ class SettingsActivity : Activity() {
         }
 
         // New apps
-        findViewById<RadioGroup>(R.id.new_app_mode).apply {
-            check(
-                when (settings.policy.newAppMode) {
-                    NewAppMode.ASK -> R.id.new_app_ask
-                    NewAppMode.ALLOW -> R.id.new_app_allow
-                    NewAppMode.BLOCK -> R.id.new_app_block
-                }
-            )
-            setOnCheckedChangeListener { _, id ->
-                appWall.firewall.setNewAppMode(
-                    when (id) {
-                        R.id.new_app_allow -> NewAppMode.ALLOW
-                        R.id.new_app_block -> NewAppMode.BLOCK
-                        else -> NewAppMode.ASK
-                    }
-                )
-            }
+        findViewById<RadioGroup>(R.id.new_app_mode).setOnCheckedChangeListener { _, id ->
+            if (rendering) return@setOnCheckedChangeListener
+            newAppModes.firstOrNull { it.first == id }?.let { appWall.firewall.setNewAppMode(it.second) }
         }
 
         // Blocked traffic log
-        bindSwitch(R.id.logging_row, R.id.logging, settings.logSettings.loggingEnabled) { settings.setLoggingEnabled(it) }
-        val segments = listOf(R.id.retention_1 to 1, R.id.retention_7 to 7, R.id.retention_30 to 30)
-        fun showRetention() = segments.forEach { (id, days) ->
-            findViewById<View>(id).isSelected = days == settings.logSettings.retentionDays
-        }
-        segments.forEach { (id, days) ->
+        bindSwitch(R.id.logging_row, R.id.logging) { settings.setLoggingEnabled(it) }
+        retentionSegments.forEach { (id, days) ->
             findViewById<View>(id).setOnClickListener {
                 settings.setLogRetentionDays(days)
                 onDb({ it.prune() }) {}
-                showRetention()
+                render()
             }
         }
-        showRetention()
         findViewById<View>(R.id.open_log).setOnClickListener { startActivity(Intent(this, LogActivity::class.java)) }
         findViewById<View>(R.id.clear_log).setOnClickListener {
             AlertDialog.Builder(this)
@@ -90,11 +78,12 @@ class SettingsActivity : Activity() {
         findViewById<TextView>(R.id.version).text = getString(R.string.settings_version, version)
         findViewById<View>(R.id.source_code).setOnClickListener { openUrl(getString(R.string.repo_url)) }
         findViewById<View>(R.id.license).setOnClickListener { openUrl(getString(R.string.license_url)) }
+        render()
     }
 
     override fun onStart() {
         super.onStart()
-        statusSubscription = appWall.firewallStatus.changed.subscribe(::showAlwaysOn)
+        statusSubscription = appWall.firewallStatus.changed.subscribe(::render)
     }
 
     override fun onStop() {
@@ -105,7 +94,7 @@ class SettingsActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        showAlwaysOn()
+        render()
         // Coming back from Android's settings: ask the running firewall to re-check Always-on.
         // Its answer arrives through the status signal.
         if (appWall.firewallStatus.status.running) {
@@ -113,37 +102,41 @@ class SettingsActivity : Activity() {
         }
     }
 
-    private fun showAlwaysOn() {
+    private fun render() {
+        val status = appWall.firewallStatus.status
+        val state = settingsState(settings.policy, settings.logSettings, status.alwaysOn, appWall.anotherVpnActive())
+        rendering = true
+        findViewById<Switch>(R.id.start_on_boot).isChecked = state.startOnBoot
+        findViewById<RadioGroup>(R.id.new_app_mode).check(newAppModes.first { it.second == state.newAppMode }.first)
+        findViewById<Switch>(R.id.logging).isChecked = state.loggingEnabled
+        retentionSegments.forEach { (id, days) -> findViewById<View>(id).isSelected = days == state.retentionDays }
+        rendering = false
+
         // Text, then the dot and text color: teal when on, coral for a problem, grey otherwise.
-        val (text, level) = when (appWall.firewallStatus.status.alwaysOn) {
-            AlwaysOn.UNKNOWN -> if (appWall.anotherVpnActive()) {
-                R.string.settings_always_on_other_vpn to Level.PROBLEM
-            } else {
-                R.string.settings_always_on_unknown to Level.NEUTRAL
-            }
-            AlwaysOn.LOCKDOWN -> R.string.settings_always_on_lockdown to Level.PROBLEM
-            AlwaysOn.ON -> R.string.settings_always_on_on to Level.ON
-            AlwaysOn.OFF -> R.string.settings_always_on_off to Level.NEUTRAL
-        }
         findViewById<TextView>(R.id.always_on_status).apply {
-            setText(text)
-            setTextColor(getColor(if (level == Level.PROBLEM) R.color.blocked else R.color.text))
-            val dot = when (level) {
-                Level.ON -> R.drawable.dot_accent
-                Level.PROBLEM -> R.drawable.dot_blocked
-                Level.NEUTRAL -> R.drawable.dot_neutral
+            setText(
+                when (state.alwaysOnText) {
+                    AlwaysOnText.ON -> R.string.settings_always_on_on
+                    AlwaysOnText.OFF -> R.string.settings_always_on_off
+                    AlwaysOnText.LOCKDOWN -> R.string.settings_always_on_lockdown
+                    AlwaysOnText.UNKNOWN -> R.string.settings_always_on_unknown
+                    AlwaysOnText.OTHER_VPN -> R.string.settings_always_on_other_vpn
+                }
+            )
+            setTextColor(getColor(if (state.alwaysOnLevel == StatusLevel.PROBLEM) R.color.blocked else R.color.text))
+            val dot = when (state.alwaysOnLevel) {
+                StatusLevel.ON -> R.drawable.dot_accent
+                StatusLevel.PROBLEM -> R.drawable.dot_blocked
+                StatusLevel.NEUTRAL -> R.drawable.dot_neutral
             }
             setCompoundDrawablesRelativeWithIntrinsicBounds(dot, 0, 0, 0)
         }
     }
 
-    private enum class Level { ON, NEUTRAL, PROBLEM }
-
     /** A row with a switch at its end: tapping anywhere on the row flips the switch. */
-    private fun bindSwitch(rowId: Int, switchId: Int, value: Boolean, onChange: (Boolean) -> Unit) {
+    private fun bindSwitch(rowId: Int, switchId: Int, onChange: (Boolean) -> Unit) {
         val switch = findViewById<Switch>(switchId)
-        switch.isChecked = value
-        switch.setOnCheckedChangeListener { _, on -> onChange(on) }
+        switch.setOnCheckedChangeListener { _, on -> if (!rendering) onChange(on) }
         findViewById<View>(rowId).setOnClickListener { switch.toggle() }
     }
 

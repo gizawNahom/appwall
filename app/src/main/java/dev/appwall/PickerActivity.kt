@@ -15,28 +15,25 @@ import android.widget.ImageView
 import android.widget.ListView
 import android.widget.TextView
 import dev.appwall.core.apps.AppEntry
+import dev.appwall.core.screens.PickerEmpty
+import dev.appwall.core.screens.PickerFilter
+import dev.appwall.core.screens.pickerState
 
 /**
  * "Block an app": pick any number of allowed apps and block them together. Returns the chosen
- * packages as [EXTRA_PACKAGES]; the home screen applies them (so it can offer Undo).
+ * packages as [EXTRA_PACKAGES]; the home screen applies them (so it can offer Undo). What it
+ * shows comes from [pickerState]; this only keeps the inputs and draws.
  */
 class PickerActivity : Activity() {
-
-    /**
-     * APPS: everything with an icon, preinstalled apps included. RECENT: apps you installed in the
-     * last week, newest first. SYSTEM: preinstalled apps and background services, which can break
-     * other apps when blocked, so they're kept out of the default view.
-     */
-    private enum class Filter { APPS, RECENT, SYSTEM }
 
     private val settings get() = appWall.settings
     private lateinit var icons: AppIcons
     private val adapter = PickAdapter()
-    private var allowed: List<AppEntry> = emptyList()
+    private var apps: List<AppEntry>? = null
     private val picked = LinkedHashSet<String>()
-    private var filter = Filter.APPS
+    private var filter = PickerFilter.APPS
     private var query = ""
-    private val chips = listOf(R.id.filter_apps to Filter.APPS, R.id.filter_recent to Filter.RECENT, R.id.filter_system to Filter.SYSTEM)
+    private val chips = listOf(R.id.filter_apps to PickerFilter.APPS, R.id.filter_recent to PickerFilter.RECENT, R.id.filter_system to PickerFilter.SYSTEM)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,33 +51,33 @@ class PickerActivity : Activity() {
             setOnItemClickListener { _, _, position, _ ->
                 val app = this@PickerActivity.adapter.getItem(position)
                 if (!picked.remove(app.packageName)) picked += app.packageName
-                this@PickerActivity.adapter.notifyDataSetChanged()
-                updateConfirm()
+                render()
             }
         }
         findViewById<EditText>(R.id.search).addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
-                query = s?.toString()?.trim().orEmpty()
-                refilter()
+                query = s?.toString().orEmpty()
+                render()
             }
         })
-        chips.forEach { (id, f) -> findViewById<View>(id).setOnClickListener { selectFilter(f) } }
-        selectFilter(Filter.APPS)
-        updateConfirm()
-
-        // Usually the home screen loaded the list moments ago; only load when it hasn't.
-        val latest = appWall.apps.latest
-        if (latest != null) {
-            setApps(latest)
-        } else {
-            findViewById<View>(R.id.loading).visibility = View.VISIBLE
-            appWall.apps.load { loaded ->
-                findViewById<View>(R.id.loading).visibility = View.GONE
-                setApps(loaded)
+        chips.forEach { (id, chipFilter) ->
+            findViewById<View>(id).setOnClickListener {
+                filter = chipFilter
+                render()
             }
         }
+
+        // Usually the home screen loaded the list moments ago; only load when it hasn't.
+        apps = appWall.apps.latest
+        if (apps == null) {
+            appWall.apps.load { loaded ->
+                apps = loaded
+                render()
+            }
+        }
+        render()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -88,48 +85,29 @@ class PickerActivity : Activity() {
         outState.putStringArray(STATE_PICKED, picked.toTypedArray())
     }
 
-    private fun setApps(apps: List<AppEntry>) {
-        allowed = apps.filter { !settings.policy.isBlocked(it.packageName) }
-        findViewById<TextView>(R.id.allowed_total).text = getString(R.string.picker_allowed_total, allowed.size)
-        refilter()
-    }
-
-    private fun selectFilter(f: Filter) {
-        filter = f
-        chips.forEach { (id, chipFilter) -> findViewById<View>(id).isSelected = chipFilter == f }
-        refilter()
-    }
-
-    private fun refilter() {
-        val matching = allowed.filter {
-            query.isEmpty() || it.label.contains(query, ignoreCase = true) || it.packageName.contains(query, ignoreCase = true)
-        }
-        val weekAgo = System.currentTimeMillis() - RECENT_MS
-        adapter.shown = when (filter) {
-            Filter.APPS -> matching.filter { !it.isSystemService }
-            Filter.RECENT -> matching.filter { !it.isSystem && it.installedAt >= weekAgo }.sortedByDescending { it.installedAt }
-            Filter.SYSTEM -> matching.filter { it.isSystem }
-        }
+    private fun render() {
+        val state = pickerState(apps, settings.policy.blocked, filter, query, picked, System.currentTimeMillis())
+        chips.forEach { (id, chipFilter) -> findViewById<View>(id).isSelected = chipFilter == filter }
+        findViewById<View>(R.id.loading).visibility = if (state.shown == null) View.VISIBLE else View.GONE
+        findViewById<TextView>(R.id.allowed_total).text =
+            if (state.shown == null) "" else getString(R.string.picker_allowed_total, state.allowedTotal)
+        adapter.shown = state.shown.orEmpty()
         adapter.notifyDataSetChanged()
         findViewById<TextView>(R.id.empty).apply {
-            visibility = if (adapter.shown.isEmpty() && allowed.isNotEmpty()) View.VISIBLE else View.GONE
-            setText(
-                when {
-                    query.isNotEmpty() -> R.string.empty_search
-                    filter == Filter.RECENT -> R.string.picker_empty_recent
-                    else -> R.string.picker_empty
-                }
-            )
+            visibility = if (state.empty == PickerEmpty.NONE) View.GONE else View.VISIBLE
+            when (state.empty) {
+                PickerEmpty.NONE -> Unit
+                PickerEmpty.NO_MATCH -> setText(R.string.empty_search)
+                PickerEmpty.NO_RECENT -> setText(R.string.picker_empty_recent)
+                PickerEmpty.NOTHING -> setText(R.string.picker_empty)
+            }
         }
-    }
-
-    private fun updateConfirm() {
         findViewById<Button>(R.id.confirm).apply {
-            isEnabled = picked.isNotEmpty()
-            text = if (picked.isEmpty()) {
+            isEnabled = state.pickedCount > 0
+            text = if (state.pickedCount == 0) {
                 getString(R.string.picker_select)
             } else {
-                resources.getQuantityString(R.plurals.picker_block_n, picked.size, picked.size)
+                resources.getQuantityString(R.plurals.picker_block_n, state.pickedCount, state.pickedCount)
             }
         }
     }
@@ -158,6 +136,5 @@ class PickerActivity : Activity() {
         /** Result: the packages the user chose to block. */
         const val EXTRA_PACKAGES = "dev.appwall.PICKED_PACKAGES"
         private const val STATE_PICKED = "picked"
-        private const val RECENT_MS = 7 * 24 * 60 * 60 * 1000L
     }
 }
