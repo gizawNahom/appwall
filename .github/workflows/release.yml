@@ -1,0 +1,71 @@
+# Pushing a tag like v0.1.0 tests, builds and signs the APK, then publishes it with its checksum
+# as a GitHub Release. The signing key lives in the "release" environment's secrets.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write # to create the release
+    steps:
+      # Pinned to a commit (v7.0.1) so a moved tag can't change it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Check the tag matches the app's version
+        run: |
+          version=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match versionName $version in app/build.gradle.kts"
+            exit 1
+          fi
+
+      - name: Check the Gradle wrapper is genuine
+        run: |
+          expected=$(curl -fsSL "https://services.gradle.org/distributions/gradle-$(sed -n 's#.*gradle-\(.*\)-bin\.zip#\1#p' gradle/wrapper/gradle-wrapper.properties)-wrapper.jar.sha256")
+          echo "$expected  gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
+
+      - name: Use the runner's JDK 17 and the SDK versions the build pins
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+
+      - name: Test
+        run: ./gradlew test
+
+      - name: Build and sign
+        env:
+          KEYSTORE_BASE64: ${{ secrets.APPWALL_KEYSTORE_BASE64 }}
+          APPWALL_KEYSTORE_PASSWORD: ${{ secrets.APPWALL_KEYSTORE_PASSWORD }}
+          APPWALL_KEY_ALIAS: ${{ secrets.APPWALL_KEY_ALIAS }}
+        run: |
+          export APPWALL_KEYSTORE="$RUNNER_TEMP/release.jks"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$APPWALL_KEYSTORE"
+          ./gradlew assembleRelease
+          rm -f "$APPWALL_KEYSTORE"
+
+      - name: Verify the signature and name the files
+        run: |
+          apk="AppWall-$GITHUB_REF_NAME.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk
+          cp app/build/outputs/apk/release/app-release.apk "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+          cat "$apk.sha256"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk="AppWall-$GITHUB_REF_NAME.apk"
+          gh release create "$GITHUB_REF_NAME" "$apk" "$apk.sha256" \
+            --repo "$GITHUB_REPOSITORY" --title "AppWall $GITHUB_REF_NAME" --generate-notes

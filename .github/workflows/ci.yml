@@ -1,0 +1,36 @@
+# Runs the tests and builds the app on every push and pull request. Needs no secrets.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      # The only third-party code in CI; pinned to a commit (v7.0.1) so a moved tag can't change it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Check the Gradle wrapper is genuine
+        run: |
+          expected=$(curl -fsSL "https://services.gradle.org/distributions/gradle-$(sed -n 's#.*gradle-\(.*\)-bin\.zip#\1#p' gradle/wrapper/gradle-wrapper.properties)-wrapper.jar.sha256")
+          echo "$expected  gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
+
+      - name: Use the runner's JDK 17 and the SDK versions the build pins
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+
+      - name: Test
+        run: ./gradlew test
+
+      - name: Build
+        run: ./gradlew assembleDebug assembleRelease
