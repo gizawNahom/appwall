@@ -17,6 +17,25 @@ android {
         versionName = "0.1.0"
     }
 
+    // Release signing comes only from the environment (CI secrets or a local shell), never from the repo.
+    // Without it, assembleRelease still builds, just unsigned.
+    val releaseKeystore = System.getenv("APPWALL_KEYSTORE")
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("APPWALL_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("APPWALL_KEY_ALIAS")
+                keyPassword = System.getenv("APPWALL_KEYSTORE_PASSWORD") // PKCS12 uses one password for both
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.findByName("release")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

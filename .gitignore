@@ -6,3 +6,7 @@ local.properties
 .idea/
 *.iml
 .DS_Store
+
+# Signing keys never belong in the repo.
+*.jks
+*.keystore
