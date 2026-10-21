@@ -14,7 +14,8 @@ import dev.appwall.core.log.LogWrite
  * into rows by [LogMerger]. Entries expire after the user's chosen retention period.
  *
  * Talks only to [SqlDb], so all of its SQL runs in JVM tests too. Keep the SQL to what SQLite
- * 3.18 (Android 8) supports.
+ * 3.18 (Android 8) supports. Every SQL text is a literal or a constant; values only ever travel as
+ * bound `?` arguments, so nothing an app controls (its name, the hosts it looks up) can become SQL.
  *
  * Used only on the database thread, which [onDbThread] recognizes; any other caller fails loudly
  * rather than racing it. That one thread is also why nothing here needs a lock. Every committed
@@ -67,21 +68,18 @@ class SqlBlockLog(
     /** One app's entries (null = the unattributed ones), newest first. */
     fun entriesFor(packageName: String?, limit: Int = 500): List<LogEntry> {
         checkThread()
-        val (forApp, appArgs) = appFilter(packageName)
         return db.query(
-            "SELECT time, protocol, address, port, host, attempts FROM log WHERE $forApp AND time >= ? ORDER BY time DESC LIMIT ?",
-            appArgs + since() + limit,
+            if (packageName == null) ENTRIES_UNATTRIBUTED else ENTRIES_FOR_APP,
+            listOfNotNull(packageName) + since() + limit,
         ) { LogEntry(it.long(0), packageName, it.int(1), it.string(2)!!, it.int(3), it.string(4), it.int(5)) }
     }
 
     /** Where one app (null = unattributed) tried to go over the retention period, most tried first. */
     fun destinations(packageName: String?): List<Destination> {
         checkThread()
-        val (forApp, appArgs) = appFilter(packageName)
         return db.query(
-            "SELECT COALESCE(host, address), host IS NOT NULL, GROUP_CONCAT(DISTINCT port), SUM(attempts), MAX(time) " +
-                "FROM log WHERE $forApp AND time >= ? GROUP BY 1, 2 ORDER BY 4 DESC",
-            appArgs + since(),
+            if (packageName == null) DESTINATIONS_UNATTRIBUTED else DESTINATIONS_FOR_APP,
+            listOfNotNull(packageName) + since(),
         ) {
             val isLookup = it.int(1) != 0
             // A lookup's port is always DNS's, which says nothing about the app.
@@ -89,10 +87,6 @@ class SqlBlockLog(
             Destination(it.string(0)!!, isLookup, ports, it.int(3), it.long(4))
         }
     }
-
-    /** SQL matching one app's rows; `package = ?` can't match the unattributed (null) ones. */
-    private fun appFilter(packageName: String?): Pair<String, List<Any?>> =
-        if (packageName == null) "package IS NULL" to emptyList() else "package = ?" to listOf(packageName)
 
     /** One row per app, most recently active first. */
     fun summaries(): List<AppSummary> {
@@ -114,40 +108,24 @@ class SqlBlockLog(
 
     /**
      * Attempts in [buckets] consecutive windows of [bucketMs] starting at [since], oldest first
-     * (for sparklines), for one app or (null) all of them. A merged row counts in the window of
-     * its latest attempt.
+     * (for the log's chart). A merged row counts in the window of its latest attempt.
      */
-    fun attemptsPerBucket(since: Long, bucketMs: Long, buckets: Int, packageName: String? = null): IntArray {
+    fun attemptsPerBucket(since: Long, bucketMs: Long, buckets: Int): IntArray {
         checkThread()
         val result = IntArray(buckets)
-        val forApp = if (packageName != null) " AND package = ?" else ""
         db.query(
-            "SELECT (time - ?) / ?, SUM(attempts) FROM log WHERE time >= ?$forApp GROUP BY 1",
-            listOfNotNull(since, bucketMs, since, packageName),
+            "SELECT (time - ?) / ?, SUM(attempts) FROM log WHERE time >= ? GROUP BY 1",
+            listOf(since, bucketMs, since),
         ) { it.int(0) to it.int(1) }.forEach { (bucket, attempts) ->
             if (bucket in 0 until buckets) result[bucket] = attempts
         }
         return result
     }
 
-    /** When the most recent blocked attempt happened (by one app, or any), or null if none is logged. */
-    fun lastAttemptTime(packageName: String? = null): Long? {
+    /** When the most recent blocked attempt happened, or null if none is logged. */
+    fun lastAttemptTime(): Long? {
         checkThread()
-        val (where, args) = if (packageName != null) " WHERE package = ?" to listOf(packageName) else "" to emptyList()
-        return db.query("SELECT MAX(time) FROM log$where", args) { if (it.isNull(0)) null else it.long(0) }.single()
-    }
-
-    /**
-     * Where one app tried to go since [since], most attempted first: domain names where known,
-     * otherwise addresses. Returns the top [limit] and the total number of distinct destinations.
-     */
-    fun topDestinations(packageName: String, since: Long, limit: Int): Pair<List<String>, Int> {
-        checkThread()
-        val all = db.query(
-            "SELECT COALESCE(host, address), SUM(attempts) FROM log WHERE package = ? AND time >= ? GROUP BY 1 ORDER BY 2 DESC",
-            listOf(packageName, since),
-        ) { it.string(0)!! }
-        return all.take(limit) to all.size
+        return db.query("SELECT MAX(time) FROM log") { if (it.isNull(0)) null else it.long(0) }.single()
     }
 
     /** Deletes entries older than the retention period, e.g. right after it was shortened. */
@@ -201,6 +179,18 @@ class SqlBlockLog(
         /** 2: adds the (package, time) index for the per-app queries. */
         const val VERSION = 2
         private const val PROBE_PACKAGE = "dev.appwall.probe"
+
+        // Queries with an unattributed variant: `package = ?` can't match the null ones. Chosen
+        // whole, so no SQL text is ever assembled at run time.
+        private const val ENTRIES = "SELECT time, protocol, address, port, host, attempts FROM log WHERE "
+        private const val ENTRIES_TAIL = " AND time >= ? ORDER BY time DESC LIMIT ?"
+        private const val ENTRIES_FOR_APP = ENTRIES + "package = ?" + ENTRIES_TAIL
+        private const val ENTRIES_UNATTRIBUTED = ENTRIES + "package IS NULL" + ENTRIES_TAIL
+        private const val DESTINATIONS =
+            "SELECT COALESCE(host, address), host IS NOT NULL, GROUP_CONCAT(DISTINCT port), SUM(attempts), MAX(time) FROM log WHERE "
+        private const val DESTINATIONS_TAIL = " AND time >= ? GROUP BY 1, 2 ORDER BY 4 DESC"
+        private const val DESTINATIONS_FOR_APP = DESTINATIONS + "package = ?" + DESTINATIONS_TAIL
+        private const val DESTINATIONS_UNATTRIBUTED = DESTINATIONS + "package IS NULL" + DESTINATIONS_TAIL
         private const val DAY_MS = 24 * 60 * 60 * 1000L
 
         /** Creates the schema in a new, empty database. */

@@ -186,7 +186,6 @@ class SqlBlockLogTest {
         now += 20_000
         record(CHROME, tcp("5.6.7.8", 443)) // bumps the bucket-1 row
         assertArrayEquals(intArrayOf(1, 3, 0), log.attemptsPerBucket(START, HOUR, 3))
-        assertArrayEquals(intArrayOf(1, 2, 0), log.attemptsPerBucket(START, HOUR, 3, CHROME))
     }
 
     @Test
@@ -205,16 +204,6 @@ class SqlBlockLogTest {
         now += 5_000
         record(OTHER, tcp("1.2.3.4", 443))
         assertEquals(now, log.lastAttemptTime())
-        assertEquals(START, log.lastAttemptTime(CHROME))
-        assertNull(log.lastAttemptTime("not.logged"))
-    }
-
-    @Test
-    fun topDestinationsAndHowManyThereAre() {
-        repeat(3) { record(CHROME, dns("busy.example")) }
-        repeat(2) { record(CHROME, tcp("1.2.3.4", 443)) }
-        record(CHROME, tcp("5.6.7.8", 443))
-        assertEquals(listOf("busy.example", "1.2.3.4") to 3, log.topDestinations(CHROME, START, 2))
     }
 
     @Test
@@ -227,6 +216,26 @@ class SqlBlockLogTest {
         retentionDays = 1
         log.prune()
         assertEquals(1, rows())
+    }
+
+    // Values an app controls never become SQL
+
+    @Test
+    fun hostileNamesAreStoredAndFoundVerbatimAndBreakNothing() {
+        val evil = "x'); DROP TABLE log;--"
+        val evilHost = "a.example' OR '1'='1"
+        record(evil, tcp("1.2.3.4", 443))
+        record(evil, dns(evilHost))
+        record(CHROME, tcp("5.6.7.8", 443))
+        now += 1_000
+
+        assertEquals(3, rows()) // the table is still there, with all three rows
+        assertEquals(setOf(evil, CHROME), log.summaries().map { it.packageName }.toSet())
+        assertEquals(setOf("1.2.3.4", evilHost), log.destinations(evil).map { it.name }.toSet())
+        assertEquals(setOf(evilHost, null), log.entriesFor(evil).map { it.host }.toSet())
+        // The quote didn't widen the match: Chrome's row isn't in the hostile app's results.
+        assertEquals(listOf("5.6.7.8"), log.destinations(CHROME).map { it.name })
+        assertEquals(2, log.attemptsSince(START)[evil])
     }
 
     // Start-up check
@@ -286,7 +295,6 @@ class SqlBlockLogTest {
         for (sql in listOf(
             "SELECT time FROM log WHERE package = ? AND time >= ? ORDER BY time DESC LIMIT 500", // entriesFor
             "SELECT COALESCE(host, address), SUM(attempts) FROM log WHERE package = ? AND time >= ? GROUP BY 1", // destinations
-            "SELECT MAX(time) FROM log WHERE package = ?", // lastAttemptTime
         )) {
             val plan = db.query("EXPLAIN QUERY PLAN $sql", listOf("x", "0").take(sql.count { it == '?' })) { it.string(3) }.joinToString()
             assertTrue("$sql: $plan", "log_package_time" in plan)
@@ -336,13 +344,10 @@ class SqlBlockLogTest {
         time("destinations(busiest)") { log.destinations(APPS[0]) }
         time("entriesFor(busiest)") { log.entriesFor(APPS[0]) }
         time("attemptsPerBucket(24h)") { log.attemptsPerBucket(now - DAY, HOUR, 24) }
-        time("attemptsPerBucket(24h, app)") { log.attemptsPerBucket(now - DAY, HOUR, 24, APPS[0]) }
-        time("topDestinations(7d)") { log.topDestinations(APPS[0], now - 7 * DAY, 3) }
 
         for ((name, sql) in listOf(
             "destinations" to "SELECT COALESCE(host, address) FROM log WHERE package = 'x' AND time >= 0 GROUP BY 1",
             "entriesFor" to "SELECT time FROM log WHERE package = 'x' AND time >= 0 ORDER BY time DESC LIMIT 500",
-            "lastAttemptTime(app)" to "SELECT MAX(time) FROM log WHERE package = 'x'",
         )) {
             val plan = db.query("EXPLAIN QUERY PLAN $sql") { it.string(3) }
             println("PLAN $name: ${plan.joinToString("; ")}")

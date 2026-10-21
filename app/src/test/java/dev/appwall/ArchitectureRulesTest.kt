@@ -96,6 +96,52 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    fun sqlIsNeverBuiltFromValues() {
+        // Values an app controls (its package name, hosts it looks up) must only ever be bound
+        // `?` arguments. So: SQL text lives in SqlBlockLog alone, and every statement it runs is a
+        // literal or a compile-time constant (const val can't hold run-time data), never a template.
+        val sqlWords = Regex("""\b(SELECT|INSERT INTO|UPDATE|DELETE FROM|CREATE|DROP|PRAGMA)\b""")
+        val literal = Regex(""""(?:[^"\\]|\\.)*"""")
+        val withSql = sources.filter { file -> literal.findAll(file.readText()).any { sqlWords.containsMatchIn(it.value) } }
+        assertEquals(listOf("SqlBlockLog.kt"), withSql.map { it.name })
+
+        val log = File("src/main/java/dev/appwall/SqlBlockLog.kt").readText()
+        val templated = literal.findAll(log).map { it.value }.filter { sqlWords.containsMatchIn(it) && '$' in it }.toList()
+        assertEquals(emptyList<String>(), templated)
+
+        val constant = Regex("""[A-Z][A-Z0-9_]*""")
+        val allowed = listOf(
+            Regex("""(?:"[^"$]*"\s*\+\s*)*"[^"$]*""""), // a literal, maybe split over lines
+            constant,
+            Regex("""if \([^()]*\) [A-Z][A-Z0-9_]* else [A-Z][A-Z0-9_]*"""), // a choice between two constants
+        )
+        val calls = Regex("""\bdb\.(query|execute|insert)\(""").findAll(log).toList()
+        assertTrue(calls.size > 10) // guards against a regex that silently matches nothing
+        val unsafe = calls.map { firstArgument(log, it.range.last + 1) }.filter { arg -> allowed.none { it.matches(arg) } }
+        assertEquals(emptyList<String>(), unsafe)
+    }
+
+    /** The source text of the first argument of the call whose `(` ends just before [start]. */
+    private fun firstArgument(text: String, start: Int): String {
+        var depth = 0
+        var inString = false
+        var i = start
+        while (i < text.length) {
+            val c = text[i]
+            when {
+                inString && c == '\\' -> i++
+                c == '"' -> inString = !inString
+                inString -> {}
+                c == '(' || c == '[' || c == '{' -> depth++
+                (c == ')' || c == ']' || c == '}') && depth > 0 -> depth--
+                (c == ',' || c == ')') && depth == 0 -> return text.substring(start, i).trim()
+            }
+            i++
+        }
+        return text.substring(start).trim()
+    }
+
+    @Test
     fun sourcesWereFound() {
         // Guards the rules above against passing vacuously if the source path is wrong.
         assertEquals(true, sources.any { it.name == "MainActivity.kt" })
