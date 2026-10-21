@@ -88,7 +88,7 @@
     <string name="card_off">Blocked apps can use the internet until you turn it back on.</string>
     <string name="undo_wall_off">Wall is off</string>
     <string name="empty_search">No apps match your search.</string>
-    <string name="show_system_apps">Show system apps</string>
+    <string name="show_system_apps">Show background services</string>
     <string name="channel_new_apps">New apps</string>
     <string name="new_app_title">New app: %1$s</string>
     <string name="new_app_text">It can access the internet. Block it?</string>
@@ -122,7 +122,7 @@
     <string name="settings_new_app_block">Block automatically</string>
     <string name="settings_new_app_note">Only works while the wall is up.</string>
     <string name="settings_section_apps">App list</string>
-    <string name="settings_show_system_note">Background parts of Android, left off the list unless you need them. Search finds them either way.</string>
+    <string name="settings_show_system_note">Parts of Android without an app icon. Search finds them either way.</string>
     <string name="settings_section_log">Blocked traffic log</string>
     <string name="settings_logging_note">Blocked apps stay blocked either way.</string>
     <string name="settings_open_log">Open the log</string>
