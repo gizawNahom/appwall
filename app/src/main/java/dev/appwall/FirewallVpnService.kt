@@ -20,6 +20,7 @@ import android.os.SystemClock
 import android.util.Log
 import dev.appwall.core.firewall.DNS_SERVER
 import dev.appwall.core.firewall.TunnelPlan
+import dev.appwall.core.firewall.shouldReapply
 import dev.appwall.core.firewall.tunnelPlan
 import dev.appwall.core.state.AlwaysOn
 import dev.appwall.core.state.Attribution
@@ -128,7 +129,7 @@ class FirewallVpnService : VpnService() {
      */
     private fun onPolicyChanged() {
         val policy = appWall.settings.policy
-        if (status.status.running && policy.enabled && policy.blocked != appliedBlocked) applyRules()
+        if (shouldReapply(status.status.running, policy.enabled, policy.blocked, appliedBlocked)) applyRules()
     }
 
     /** (Re)builds the tunnel from the current rules. Safe to call while already running. */

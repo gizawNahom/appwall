@@ -64,3 +64,12 @@ fun newAppDecision(mode: NewAppMode, isSelf: Boolean, alreadyBlocked: Boolean, u
     mode == NewAppMode.BLOCK -> NewAppDecision.AUTO_BLOCK
     else -> NewAppDecision.ASK
 }
+
+/**
+ * After the policy was saved: rebuild the tunnel only if the firewall is running, still meant to
+ * be on, and the blocked apps differ from what the tunnel was built for ([appliedBlocked], null
+ * before the first build). So repeats, and the service's own writes, never cause a rebuild, and a
+ * real change is never left unapplied.
+ */
+fun shouldReapply(running: Boolean, enabled: Boolean, blocked: Set<String>, appliedBlocked: Set<String>?): Boolean =
+    running && enabled && blocked != appliedBlocked

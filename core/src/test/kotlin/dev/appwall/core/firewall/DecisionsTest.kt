@@ -87,4 +87,20 @@ class DecisionsTest {
 
     private fun packet(protocol: Int, destination: String, port: Int) =
         Packet(protocol, InetAddress.getByName("10.111.0.1"), 40000, InetAddress.getByName(destination), port, null)
+
+    @Test
+    fun shouldReapplyTable() {
+        data class Case(val running: Boolean, val enabled: Boolean, val blocked: Set<String>, val applied: Set<String>?, val expected: Boolean)
+        val ab = setOf("a", "b")
+        val cases = listOf(
+            Case(true, true, ab, setOf("a"), true), // blocked another app
+            Case(true, true, setOf("a"), ab, true), // allowed one
+            Case(true, true, emptySet(), ab, true), // allowed the last: must drop the tunnel
+            Case(true, true, ab, null, true), // never built yet
+            Case(true, true, ab, setOf("b", "a"), false), // same apps: a repeat, or the service's own write
+            Case(true, false, ab, setOf("a"), false), // turned off: stopping is the off command's job
+            Case(false, true, ab, setOf("a"), false), // not running: the next start builds from the saved rules
+        )
+        for (c in cases) assertEquals(c.toString(), c.expected, shouldReapply(c.running, c.enabled, c.blocked, c.applied))
+    }
 }
