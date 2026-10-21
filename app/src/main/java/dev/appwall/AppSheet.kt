@@ -43,7 +43,7 @@ class AppSheet(
 
     class Choice(val text: CharSequence, val role: Role, val onChoose: () -> Unit = {})
 
-    fun show(activity: Activity) {
+    fun show(activity: Activity): Dialog {
         val view = activity.layoutInflater.inflate(R.layout.sheet, null)
         val dialog = Dialog(activity).apply {
             requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -90,6 +90,7 @@ class AppSheet(
             row.addView(button, params)
         }
         dialog.show()
+        return dialog
     }
 
     /** Edge to edge on a phone; on a wide window, as wide as the screen's content. */

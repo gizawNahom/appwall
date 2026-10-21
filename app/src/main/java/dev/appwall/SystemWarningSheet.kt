@@ -13,10 +13,10 @@ import dev.appwall.core.screens.joinNames
  */
 object SystemWarningSheet {
 
-    fun show(activity: Activity, warning: SystemAppWarning, block: (List<AppEntry>) -> Unit) {
+    fun build(activity: Activity, warning: SystemAppWarning, block: (List<AppEntry>) -> Unit): AppSheet {
         val all = warning.system + warning.others
         val names = warning.system.map { it.label }
-        val sheet = if (all.size == 1) {
+        return if (all.size == 1) {
             AppSheet(
                 label = activity.getString(R.string.warn_label_one),
                 title = activity.getString(R.string.warn_title_one, names[0]),
@@ -53,6 +53,5 @@ object SystemWarningSheet {
                 },
             )
         }
-        sheet.show(activity)
     }
 }

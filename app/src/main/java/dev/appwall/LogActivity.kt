@@ -32,6 +32,7 @@ class LogActivity : Activity() {
     private var shown: LogState? = null
     /** The summary and column titles, when they scroll with the list (see [scrollWithList]). */
     private var header: View? = null
+    private val sheet = OpenSheet(this) { key, _ -> if (key == SHEET_CLEAR) confirmClear() }
     /** Keeps each row's "2h" true while nothing else changes. */
     private val ticker = MinuteTicker(this) { adapter.notifyDataSetChanged() }
 
@@ -73,6 +74,17 @@ class LogActivity : Activity() {
             }
         }
         (lastNonConfigurationInstance as? LogState)?.let(::render)
+        sheet.restore(savedInstanceState)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        sheet.save(outState)
+    }
+
+    override fun onDestroy() {
+        sheet.close()
+        super.onDestroy()
     }
 
     override fun onRetainNonConfigurationInstance(): Any? = shown
@@ -91,14 +103,17 @@ class LogActivity : Activity() {
 
     private fun confirmClear() {
         // Deleting the log can't be undone: coral, like every destructive action.
-        AppSheet(
-            title = getString(R.string.log_clear_title),
-            body = getString(R.string.log_clear_text),
-            choices = listOf(
-                AppSheet.Choice(getString(android.R.string.cancel), AppSheet.Role.SECONDARY),
-                AppSheet.Choice(getString(R.string.log_clear), AppSheet.Role.RISKY) { onDb({ it.clear() }) {} },
+        sheet.show(
+            AppSheet(
+                title = getString(R.string.log_clear_title),
+                body = getString(R.string.log_clear_text),
+                choices = listOf(
+                    AppSheet.Choice(getString(android.R.string.cancel), AppSheet.Role.SECONDARY),
+                    AppSheet.Choice(getString(R.string.log_clear), AppSheet.Role.RISKY) { onDb({ it.clear() }) {} },
+                ),
             ),
-        ).show(this)
+            SHEET_CLEAR,
+        )
     }
 
     private fun render(state: LogState) {
@@ -171,6 +186,7 @@ class LogActivity : Activity() {
     }
 
     companion object {
+        private const val SHEET_CLEAR = "clear"
         private const val HOUR_MS = 60 * 60 * 1000L
         private const val DAY_MS = 24 * HOUR_MS
 

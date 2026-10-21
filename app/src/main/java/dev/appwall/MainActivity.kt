@@ -24,6 +24,7 @@ import dev.appwall.core.screens.CardLine
 import dev.appwall.core.screens.HomeItem
 import dev.appwall.core.screens.HomeNotice
 import dev.appwall.core.screens.HomeState
+import dev.appwall.core.screens.SystemAppWarning
 import dev.appwall.core.screens.systemAppWarning
 import dev.appwall.core.screens.homeState
 import dev.appwall.core.state.Subscription
@@ -70,6 +71,9 @@ class MainActivity : Activity() {
     /** PackageManager's change counter when the list was last loaded; used to spot installs/uninstalls. */
     private var packagesSequence = 0
     private val subscriptions = ArrayList<Subscription>()
+    private val sheet = OpenSheet(this, ::reopenSheet)
+    /** Waiting for the app list, e.g. a warning sheet to ask again after the process was killed. */
+    private var afterLoad: ((List<AppEntry>) -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -157,6 +161,7 @@ class MainActivity : Activity() {
         if (apps == null) loadApps() else revealList(animate = false)
         render()
         if (savedInstanceState == null) askAboutNewApp(intent)
+        sheet.restore(savedInstanceState)
     }
 
     override fun onRetainNonConfigurationInstance(): Any = Kept(apps, packagesSequence, lastAttempt, selected, undo)
@@ -165,9 +170,11 @@ class MainActivity : Activity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         selected?.let { outState.putStringArray(STATE_SELECTED, it.toTypedArray()) }
+        sheet.save(outState)
     }
 
     override fun onDestroy() {
+        sheet.close()
         handler.removeCallbacks(hideUndo)
         super.onDestroy()
     }
@@ -186,21 +193,47 @@ class MainActivity : Activity() {
         // AppWall's own notification for that app is showing: then the tap came from it.
         if (!NewAppNotifier.isShowing(this, packageName)) return
         NewAppNotifier.cancel(this, packageName)
+        askAboutNewApp(packageName)
+    }
+
+    private fun askAboutNewApp(packageName: String) {
         val info = try {
             packageManager.getApplicationInfo(packageName, 0)
         } catch (e: PackageManager.NameNotFoundException) {
             return // uninstalled again before the user got here
         }
         val label = info.loadLabel(packageManager)
-        AppSheet(
-            label = getString(R.string.new_app_label),
-            title = getString(R.string.new_app_dialog_title, label),
-            body = getString(R.string.new_app_dialog_text),
-            choices = listOf(
-                AppSheet.Choice(getString(R.string.warn_keep), AppSheet.Role.SECONDARY),
-                AppSheet.Choice(getString(R.string.block), AppSheet.Role.MAIN) { appWall.firewall.block(listOf(packageName)) },
+        sheet.show(
+            AppSheet(
+                label = getString(R.string.new_app_label),
+                title = getString(R.string.new_app_dialog_title, label),
+                body = getString(R.string.new_app_dialog_text),
+                choices = listOf(
+                    AppSheet.Choice(getString(R.string.warn_keep), AppSheet.Role.SECONDARY),
+                    AppSheet.Choice(getString(R.string.block), AppSheet.Role.MAIN) { appWall.firewall.block(listOf(packageName)) },
+                ),
             ),
-        ).show(this)
+            SHEET_NEW_APP,
+            listOf(packageName),
+        )
+    }
+
+    /** Asks again what a rebuilt screen had open (see [OpenSheet]). */
+    private fun reopenSheet(key: String, args: List<String>) {
+        when (key) {
+            // Our own saved state, not an intent: no notification check needed.
+            SHEET_NEW_APP -> args.firstOrNull()?.let(::askAboutNewApp)
+            SHEET_OTHER_VPN -> showOtherVpnDialog()
+            SHEET_SYSTEM_APPS -> whenAppsLoaded { loaded ->
+                val stillAllowed = loaded.filter { it.packageName in args && !settings.policy.isBlocked(it.packageName) }
+                systemAppWarning(stillAllowed)?.let(::warnAboutSystemApps)
+            }
+        }
+    }
+
+    private fun whenAppsLoaded(action: (List<AppEntry>) -> Unit) {
+        val loaded = apps
+        if (loaded != null) action(loaded) else afterLoad = action
     }
 
     override fun onStart() {
@@ -236,6 +269,8 @@ class MainActivity : Activity() {
             apps = loaded
             packagesSequence = sequence
             render()
+            afterLoad?.invoke(loaded)
+            afterLoad = null
         }
     }
 
@@ -273,16 +308,19 @@ class MainActivity : Activity() {
 
     /** Explains that Android allows one VPN at a time and another app has it. */
     private fun showOtherVpnDialog() {
-        AppSheet(
-            title = getString(R.string.other_vpn_title),
-            body = getString(R.string.other_vpn_message),
-            choices = listOf(
-                AppSheet.Choice(getString(android.R.string.cancel), AppSheet.Role.SECONDARY),
-                AppSheet.Choice(getString(R.string.always_on_guide_open), AppSheet.Role.MAIN) {
-                    startActivity(Intent(android.provider.Settings.ACTION_VPN_SETTINGS))
-                },
+        sheet.show(
+            AppSheet(
+                title = getString(R.string.other_vpn_title),
+                body = getString(R.string.other_vpn_message),
+                choices = listOf(
+                    AppSheet.Choice(getString(android.R.string.cancel), AppSheet.Role.SECONDARY),
+                    AppSheet.Choice(getString(R.string.always_on_guide_open), AppSheet.Role.MAIN) {
+                        startActivity(Intent(android.provider.Settings.ACTION_VPN_SETTINGS))
+                    },
+                ),
             ),
-        ).show(this)
+            SHEET_OTHER_VPN,
+        )
     }
 
     private fun startFirewall() {
@@ -332,7 +370,12 @@ class MainActivity : Activity() {
     private fun block(toBlock: List<AppEntry>) {
         if (toBlock.isEmpty()) return
         val warning = systemAppWarning(toBlock)
-        if (warning == null) blockNow(toBlock) else SystemWarningSheet.show(this, warning, ::blockNow)
+        if (warning == null) blockNow(toBlock) else warnAboutSystemApps(warning)
+    }
+
+    private fun warnAboutSystemApps(warning: SystemAppWarning) {
+        val packages = (warning.system + warning.others).map { it.packageName }
+        sheet.show(SystemWarningSheet.build(this, warning, ::blockNow), SHEET_SYSTEM_APPS, packages)
     }
 
     /** Blocks them all with one Undo for the lot, and ends choosing several. */
@@ -495,5 +538,8 @@ class MainActivity : Activity() {
         private const val UNDO_MS = 5000L
         private const val INSTANT_REFUSAL_MS = 700L
         private const val STATE_SELECTED = "selected"
+        private const val SHEET_NEW_APP = "new_app"
+        private const val SHEET_OTHER_VPN = "other_vpn"
+        private const val SHEET_SYSTEM_APPS = "system_apps"
     }
 }

@@ -26,6 +26,7 @@ class SettingsActivity : Activity() {
     private val newAppModes = listOf(R.id.new_app_ask to NewAppMode.ASK, R.id.new_app_allow to NewAppMode.ALLOW, R.id.new_app_block to NewAppMode.BLOCK)
     /** True while [render] sets the controls, so their listeners don't save what was just shown. */
     private var rendering = false
+    private val sheet = OpenSheet(this) { key, _ -> if (key == SHEET_ALWAYS_ON) showAlwaysOnGuide() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,18 +38,8 @@ class SettingsActivity : Activity() {
 
         // Firewall
         bindSwitch(R.id.start_on_boot_row, R.id.start_on_boot) { appWall.firewall.setStartOnBoot(it) }
-        // Apps can't turn on Always-on VPN themselves, and Android has no link to one VPN's own
-        // page, only to the list of VPNs. So explain the steps first, then open that list.
-        findViewById<View>(R.id.always_on).setOnClickListener {
-            AppSheet(
-                title = getString(R.string.always_on_guide_title),
-                body = getString(R.string.always_on_guide_steps),
-                choices = listOf(
-                    AppSheet.Choice(getString(android.R.string.cancel), AppSheet.Role.SECONDARY),
-                    AppSheet.Choice(getString(R.string.always_on_guide_open), AppSheet.Role.MAIN) { open(Intent(Settings.ACTION_VPN_SETTINGS)) },
-                ),
-            ).show(this)
-        }
+        // Explain the steps first, then open Android's list of VPNs.
+        findViewById<View>(R.id.always_on).setOnClickListener { showAlwaysOnGuide() }
 
         // New apps
         findViewById<RadioGroup>(R.id.new_app_mode).setOnCheckedChangeListener { _, id ->
@@ -74,6 +65,32 @@ class SettingsActivity : Activity() {
         findViewById<View>(R.id.source_code).setOnClickListener { openUrl(getString(R.string.repo_url)) }
         findViewById<View>(R.id.license).setOnClickListener { openUrl(getString(R.string.license_url)) }
         render()
+        sheet.restore(savedInstanceState)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        sheet.save(outState)
+    }
+
+    override fun onDestroy() {
+        sheet.close()
+        super.onDestroy()
+    }
+
+    /** Apps can't turn on Always-on VPN themselves, and Android has no link to one VPN's own page, only to the list. */
+    private fun showAlwaysOnGuide() {
+        sheet.show(
+            AppSheet(
+                title = getString(R.string.always_on_guide_title),
+                body = getString(R.string.always_on_guide_steps),
+                choices = listOf(
+                    AppSheet.Choice(getString(android.R.string.cancel), AppSheet.Role.SECONDARY),
+                    AppSheet.Choice(getString(R.string.always_on_guide_open), AppSheet.Role.MAIN) { open(Intent(Settings.ACTION_VPN_SETTINGS)) },
+                ),
+            ),
+            SHEET_ALWAYS_ON,
+        )
     }
 
     override fun onStart() {
@@ -144,5 +161,9 @@ class SettingsActivity : Activity() {
         } catch (e: ActivityNotFoundException) {
             Toast.makeText(this, R.string.settings_cannot_open, Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private companion object {
+        const val SHEET_ALWAYS_ON = "always_on"
     }
 }
