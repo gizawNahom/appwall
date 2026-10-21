@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    AppWall's one way to ask something: a sheet rising from the bottom edge. A small label, a
+    title, a body, an optional scrolling list of names, then the choices (see AppSheet).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_sheet"
+    android:orientation="vertical"
+    android:paddingHorizontal="20dp"
+    android:paddingTop="24dp"
+    android:paddingBottom="20dp">
+
+    <TextView
+        android:id="@+id/sheet_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="10dp"
+        android:textAppearance="@style/TextAppearance.AppWall.Label"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/sheet_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:accessibilityHeading="true"
+        android:textAppearance="@style/TextAppearance.AppWall.Title"
+        android:textSize="20sp" />
+
+    <TextView
+        android:id="@+id/sheet_body"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:lineSpacingMultiplier="1.2"
+        android:textAppearance="@style/TextAppearance.AppWall.Body1"
+        android:textColor="@color/text_secondary" />
+
+    <!-- Names too many for the sentence, in a box that scrolls. -->
+    <ScrollView
+        android:id="@+id/sheet_names_box"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_field"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/sheet_names"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:lineSpacingMultiplier="1.5"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="8dp"
+            android:textAppearance="@style/TextAppearance.AppWall.Body2" />
+    </ScrollView>
+
+    <!-- The choices: side by side when there are two, stacked when more. -->
+    <LinearLayout
+        android:id="@+id/sheet_choices"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp" />
+</LinearLayout>
