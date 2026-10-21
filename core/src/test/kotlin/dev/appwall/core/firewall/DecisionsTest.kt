@@ -44,6 +44,11 @@ class DecisionsTest {
             Case("DNS-over-TLS elsewhere is an app's", packet(PacketParser.TCP, "1.1.1.1", 853), 3, true),
             Case("ping, one app blocked", packet(PacketParser.ICMP, "8.8.8.8", 0), 1, true),
             Case("ping, several apps blocked", packet(PacketParser.ICMP, "8.8.8.8", 0), 2, false),
+            Case("IPv6 multicast (ff02::16), even as one app's", packet(0, "ff02::16", 0), 1, false),
+            Case("mDNS multicast", packet(PacketParser.UDP, "224.0.0.251", 5353), 3, false),
+            Case("broadcast", packet(PacketParser.UDP, "255.255.255.255", 67), 3, false),
+            Case("link-local", packet(PacketParser.UDP, "fe80::1", 547), 3, false),
+            Case("a private LAN address is still an app's", packet(PacketParser.TCP, "192.168.1.10", 8080), 3, true),
         )
         for (c in cases) assertEquals(c.name, c.expected, shouldCount(c.packet, c.blocked))
     }

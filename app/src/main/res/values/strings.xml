@@ -18,52 +18,19 @@
     <string name="stopped_text">The firewall hit an error it couldn\'t recover from, so blocked apps can use the internet again. Open AppWall to turn it back on.</string>
     <!-- Home -->
     <string name="wall_up">Wall up</string>
-    <string name="wall_down">Off</string>
-    <string name="headline_down">Wall is down</string>
-    <string name="headline_none">No apps blocked</string>
     <plurals name="headline_blocked">
         <item quantity="one">%d app blocked</item>
         <item quantity="other">%d apps blocked</item>
-    </plurals>
-    <plurals name="attempts_today">
-        <item quantity="one">%d attempt stopped today</item>
-        <item quantity="other">%d attempts stopped today</item>
-    </plurals>
-    <plurals name="turn_on_to_block">
-        <item quantity="one">Turn it on to block %d app</item>
-        <item quantity="other">Turn it on to block %d apps</item>
     </plurals>
     <string name="status_off_failed">AppWall turned itself off after an error. Turn it back on to block again.</string>
     <string name="status_off_revoked">Android turned AppWall off, from its settings or for another VPN app.</string>
     <string name="status_off_no_permission">AppWall needs VPN permission. Turn it on to grant it.</string>
     <string name="status_other_vpn_short">Another VPN app is active, so AppWall can\'t run</string>
-    <string name="sparkline_description">Blocked attempts in two-hour steps over the last day, newest on the right</string>
-    <string name="stat_allowed">Allowed</string>
-    <string name="stat_last_attempt">Last attempt</string>
     <string name="ago_now">now</string>
     <string name="ago_minutes">%dm</string>
     <string name="ago_hours">%dh</string>
     <string name="ago_days">%dd</string>
-    <string name="tab_blocked">Blocked</string>
-    <string name="tab_allowed">Allowed</string>
-    <string name="column_app">APP</string>
-    <string name="column_today">TODAY</string>
     <string name="undo">Undo</string>
-
-    <!-- Expanded row -->
-    <string name="row_collapsed">%1$s</string>
-    <string name="row_expanded">%1$s Expanded.</string>
-    <string name="details_activity">Last attempt %1$s · %2$s</string>
-    <plurals name="details_week">
-        <item quantity="one">%d in the last 7 days</item>
-        <item quantity="other">%d in the last 7 days</item>
-    </plurals>
-    <string name="details_no_attempts">No blocked attempts logged yet.</string>
-    <string name="details_chart_caption">LAST 24 HOURS</string>
-    <string name="details_chart_description">Blocked attempts per hour over the last 24 hours, %d in total</string>
-    <string name="details_more">+%d more</string>
-    <string name="details_allowed">Allowed. AppWall only sees traffic from blocked apps, so nothing is logged while it\'s allowed.</string>
-    <string name="details_full_log">Full log</string>
     <plurals name="undo_blocked_n">
         <item quantity="one">%d app can’t use the internet</item>
         <item quantity="other">%d apps can’t use the internet</item>
@@ -106,11 +73,7 @@
     <string name="undo_allowed">%1$s can use the internet</string>
     <string name="block_app_named">Block %1$s</string>
     <string name="state_blocked">BLOCKED</string>
-    <string name="search_all_hint">Search all apps</string>
-    <string name="search_close">Close search</string>
     <string name="search_clear">Clear search</string>
-    <string name="search_prompt">Type an app\'s name or package to find it, blocked or not.</string>
-    <string name="allow_app">Allow %1$s</string>
     <string name="row_blocked_description">%1$s, blocked: no internet. Double-tap to open its log.</string>
     <string name="row_allowed_description">%1$s, allowed. Double-tap to open its log.</string>
     <string name="row_no_internet">No internet</string>
@@ -124,8 +87,6 @@
     <string name="card_none">No apps blocked. Tap Block on any app to cut its internet.</string>
     <string name="card_off">Blocked apps can use the internet until you turn it back on.</string>
     <string name="undo_wall_off">Wall is off</string>
-    <string name="empty_blocked">Nothing is behind the wall yet. Tap \"Block an app\" to add one.</string>
-    <string name="empty_allowed">Every app is blocked.</string>
     <string name="empty_search">No apps match your search.</string>
     <string name="show_system_apps">Show system apps</string>
     <string name="channel_new_apps">New apps</string>
@@ -170,8 +131,6 @@
     <string name="settings_retention_1">1 day</string>
     <string name="settings_retention_7">7 days</string>
     <string name="settings_retention_30">30 days</string>
-    <string name="settings_clear_log">Clear log</string>
-    <string name="settings_log_cleared">Log cleared</string>
     <string name="settings_section_about">About</string>
     <string name="settings_version">Version %1$s</string>
     <string name="settings_source_code">Source code</string>
@@ -222,8 +181,8 @@
         <item quantity="other">%d tries</item>
     </plurals>
     <plurals name="log_places">
-        <item quantity="one">%d place</item>
-        <item quantity="other">%d places</item>
+        <item quantity="one">%d destination</item>
+        <item quantity="other">%d destinations</item>
     </plurals>
     <plurals name="log_app_description">
         <item quantity="one">%1$s, %2$d try, last %3$s. Opens its log.</item>
@@ -247,7 +206,7 @@
         <item quantity="other">%d TRIES</item>
     </plurals>
     <string name="state_allowed">ALLOWED</string>
-    <string name="app_log_allow">Allow %1$s</string>
+    <string name="app_log_allow">Unblock %1$s</string>
     <string name="app_log_block">Block %1$s</string>
     <string name="app_log_empty">Nothing logged for this app.</string>
     <string name="ago_just_now">just now</string>

@@ -79,6 +79,8 @@ class LogActivity : Activity() {
             .setPositiveButton(R.string.log_clear) { _, _ -> onDb({ it.clear() }) {} }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+            // Deleting the log can't be undone: coral, like every destructive action.
+            .getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(getColor(R.color.blocked))
     }
 
     private fun render(state: LogState) {

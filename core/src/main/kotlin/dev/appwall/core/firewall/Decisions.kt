@@ -2,6 +2,7 @@ package dev.appwall.core.firewall
 
 import dev.appwall.core.net.Packet
 import dev.appwall.core.net.PacketParser
+import java.net.InetAddress
 
 /** AppWall's fake DNS server inside the tunnel: blocked apps' lookups land there, unanswered. */
 const val DNS_SERVER = "10.111.0.2"
@@ -34,6 +35,9 @@ fun tunnelPlan(blocked: Set<String>, isInstalled: (String) -> Boolean): TunnelPl
 fun shouldCount(packet: Packet, blockedCount: Int): Boolean = when {
     // IPv6 housekeeping (router solicitations etc.) comes from the system, not from an app.
     packet.protocol == PacketParser.ICMPV6 -> false
+    // Multicast, broadcast and link-local (ff02::16, 224.0.0.251, fe80::…) stay on the local
+    // network: Android's own chatter, never a place on the internet an app tried to reach.
+    isLocalOnly(packet.destination) -> false
     // Android probing the fake DNS server for Private DNS (DNS-over-TLS); also not an app.
     packet.destinationPort == 853 && packet.destination.hostAddress == DNS_SERVER -> false
     // Android can only name the app for TCP and UDP; anything else is attributable only when a
@@ -41,6 +45,9 @@ fun shouldCount(packet: Packet, blockedCount: Int): Boolean = when {
     packet.protocol != PacketParser.TCP && packet.protocol != PacketParser.UDP -> blockedCount == 1
     else -> true
 }
+
+private fun isLocalOnly(address: InetAddress): Boolean =
+    address.isMulticastAddress || address.isLinkLocalAddress || address.hostAddress == "255.255.255.255"
 
 /**
  * Which app a packet belongs to, given the packages Android reports for its connection's owner

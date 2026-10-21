@@ -262,17 +262,6 @@
                         android:src="@drawable/ic_chevron" />
                 </LinearLayout>
 
-                <View style="@style/SettingsDivider" />
-
-                <LinearLayout
-                    android:id="@+id/clear_log"
-                    style="@style/SettingsRow">
-
-                    <TextView
-                        style="@style/SettingsRowTitle"
-                        android:text="@string/settings_clear_log"
-                        android:textColor="@color/blocked" />
-                </LinearLayout>
             </LinearLayout>
 
             <!-- About -->

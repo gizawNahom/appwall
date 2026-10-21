@@ -40,7 +40,7 @@
             android:stateListAnimator="@null"
             android:text="@string/log_clear"
             android:textAppearance="@style/TextAppearance.AppWall.Button"
-            android:textColor="@color/text_secondary" />
+            android:textColor="@color/blocked" />
     </LinearLayout>
 
     <!-- Summary -->

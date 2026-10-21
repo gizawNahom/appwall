@@ -63,16 +63,6 @@ class SettingsActivity : Activity() {
             }
         }
         findViewById<View>(R.id.open_log).setOnClickListener { startActivity(Intent(this, LogActivity::class.java)) }
-        findViewById<View>(R.id.clear_log).setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle(R.string.log_clear_title)
-                .setMessage(R.string.log_clear_text)
-                .setPositiveButton(R.string.log_clear) { _, _ ->
-                    onDb({ it.clear() }) { Toast.makeText(this, R.string.settings_log_cleared, Toast.LENGTH_SHORT).show() }
-                }
-                .setNegativeButton(android.R.string.cancel, null)
-                .show()
-        }
 
         // About
         val version = packageManager.getPackageInfo(packageName, 0).versionName
