@@ -11,7 +11,8 @@
     android:gravity="center_vertical"
     android:minHeight="68dp"
     android:orientation="horizontal"
-    android:paddingHorizontal="4dp">
+    android:paddingHorizontal="4dp"
+    android:paddingVertical="8dp">
 
     <!-- Shown only while choosing several apps; the row itself takes the tap. -->
     <CheckBox
@@ -44,7 +45,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="end"
-            android:maxLines="1"
+            android:maxLines="2"
             android:textAppearance="@style/TextAppearance.AppWall.Body2" />
 
         <TextView
@@ -62,7 +63,9 @@
     <Button
         android:id="@+id/app_action"
         android:layout_width="wrap_content"
-        android:layout_height="40dp"
+        android:layout_height="wrap_content"
+        android:minHeight="40dp"
+        android:paddingVertical="6dp"
         android:layout_marginStart="12dp"
         android:background="@drawable/bg_outline"
         android:focusable="false"

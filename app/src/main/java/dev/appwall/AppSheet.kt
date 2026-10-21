@@ -81,9 +81,9 @@ class AppSheet(
                 choice.onChoose()
             }
             val params = if (sideBySide) {
-                LinearLayout.LayoutParams(0, activity.dp(BUTTON_DP), 1f).apply { if (index > 0) marginStart = activity.dp(GAP_DP) }
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (index > 0) marginStart = activity.dp(GAP_DP) }
             } else {
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, activity.dp(BUTTON_DP)).apply {
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     if (index > 0) topMargin = activity.dp(if (choice.role == Role.QUIET) 4 else GAP_DP)
                 }
             }
@@ -103,6 +103,11 @@ class AppSheet(
         setTextAppearance(R.style.TextAppearance_AppWall_Button)
         isAllCaps = false
         stateListAnimator = null
+        // At least the usual height; taller when large text needs it.
+        minHeight = activity.dp(BUTTON_DP)
+        minimumHeight = activity.dp(BUTTON_DP)
+        val pad = activity.dp(BUTTON_PAD_DP)
+        setPaddingRelative(paddingStart, pad, paddingEnd, pad)
         val (background, color) = when (choice.role) {
             Role.MAIN -> R.drawable.bg_button_accent to R.color.ground
             Role.RISKY -> R.drawable.bg_button_blocked to R.color.on_blocked
@@ -116,6 +121,7 @@ class AppSheet(
 
     private companion object {
         const val BUTTON_DP = 48
+        const val BUTTON_PAD_DP = 8
         const val GAP_DP = 10
         /** A name list taller than this scrolls inside its box. */
         const val NAMES_MAX_DP = 132

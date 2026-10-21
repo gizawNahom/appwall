@@ -43,7 +43,9 @@
         <TextView
             android:id="@+id/app_log_state"
             android:layout_width="wrap_content"
-            android:layout_height="24dp"
+            android:layout_height="wrap_content"
+            android:minHeight="24dp"
+            android:paddingVertical="6dp"
             android:layout_marginStart="8dp"
             android:background="@drawable/bg_tag"
             android:drawablePadding="6dp"
@@ -65,7 +67,9 @@
         <TextView
             android:id="@+id/tab_destinations"
             android:layout_width="0dp"
-            android:layout_height="38dp"
+            android:layout_height="wrap_content"
+            android:minHeight="38dp"
+            android:paddingVertical="6dp"
             android:layout_weight="1"
             android:background="@drawable/bg_segment"
             android:gravity="center"
@@ -74,7 +78,9 @@
         <TextView
             android:id="@+id/tab_timeline"
             android:layout_width="0dp"
-            android:layout_height="38dp"
+            android:layout_height="wrap_content"
+            android:minHeight="38dp"
+            android:paddingVertical="6dp"
             android:layout_marginStart="3dp"
             android:layout_weight="1"
             android:background="@drawable/bg_segment"
@@ -133,7 +139,9 @@
     <Button
         android:id="@+id/app_log_toggle"
         android:layout_width="match_parent"
-        android:layout_height="52dp"
+        android:layout_height="wrap_content"
+        android:minHeight="52dp"
+        android:paddingVertical="8dp"
         android:layout_marginTop="12dp"
         android:background="@drawable/bg_primary"
         android:stateListAnimator="@null"
