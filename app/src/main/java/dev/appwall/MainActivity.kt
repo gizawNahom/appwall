@@ -24,10 +24,15 @@ import android.widget.ListView
 import android.widget.Switch
 import android.widget.TextView
 import dev.appwall.core.apps.AppEntry
-import dev.appwall.core.state.FirewallState
-import dev.appwall.core.state.OffReason
+import dev.appwall.core.screens.CardLine
+import dev.appwall.core.screens.Headline
+import dev.appwall.core.screens.HomeEmpty
+import dev.appwall.core.screens.HomeLogStats
+import dev.appwall.core.screens.HomeTab
+import dev.appwall.core.screens.homeState
+import dev.appwall.core.screens.startOfDay
 import dev.appwall.core.state.Subscription
-import java.util.Calendar
+import java.time.ZoneId
 
 class MainActivity : Activity() {
 
@@ -36,7 +41,13 @@ class MainActivity : Activity() {
     private lateinit var firewallSwitch: Switch
     private lateinit var icons: AppIcons
     private lateinit var search: EditText
-    private var tabBeforeSearch = AppListAdapter.Tab.BLOCKED
+    private var tabBeforeSearch = HomeTab.BLOCKED
+
+    // The screen's inputs; render() turns them into a HomeState and draws it.
+    private var apps: List<AppEntry>? = null
+    private var stats: HomeLogStats? = null
+    private var tab = HomeTab.BLOCKED
+    private var query = ""
     private var undo: (() -> Unit)? = null
     private val hideUndo = Runnable { findViewById<View>(R.id.undo_bar).visibility = View.GONE }
 
@@ -46,19 +57,20 @@ class MainActivity : Activity() {
     private val statsLoader by lazy {
         logLoader({
             val now = System.currentTimeMillis()
-            val startOfToday = startOfToday()
+            val startOfToday = startOfDay(now, ZoneId.systemDefault())
             val expanded = adapter.expandedPackage
-            fun(log: SqlBlockLog) = HomeStats(
-                now = now,
+            fun(log: SqlBlockLog) = HomeLogStats(
                 today = log.attemptsSince(startOfToday),
-                sparkline = log.attemptsPerBucket(now - DAY_MS, DAY_MS / SPARK_BARS, SPARK_BARS),
+                sparkline = log.attemptsPerBucket(now - DAY_MS, DAY_MS / SPARK_BARS, SPARK_BARS).toList(),
                 lastAttempt = log.lastAttemptTime(),
-                details = expanded?.let { AppListAdapter.loadDetails(log, it, now) },
-            )
-        }, ::showStats)
+            ) to expanded?.let { AppListAdapter.loadDetails(log, it, now) }
+        }) { (loaded, details) ->
+            stats = loaded
+            adapter.details = details
+            render()
+        }
     }
     private var updatingSwitch = false
-    private var appsLoaded = false
     private var consentRequestedAt = 0L
 
     /** PackageManager's change counter when the list was last loaded; used to spot installs/uninstalls. */
@@ -91,15 +103,14 @@ class MainActivity : Activity() {
             if (on) requestStart() else stopFirewall()
         }
 
-        adapter = AppListAdapter(this, settings, icons) { app, action -> onRowAction(app, action) }
-        adapter.setShowSystem(settings.screenPrefs.showSystemApps)
+        adapter = AppListAdapter(this, icons) { app, action -> onRowAction(app, action) }
         findViewById<ListView>(R.id.app_list).apply {
             adapter = this@MainActivity.adapter
             setOnItemClickListener { _, _, position, _ -> onAppTapped(this@MainActivity.adapter.getItem(position)) }
         }
 
-        findViewById<View>(R.id.tab_blocked).setOnClickListener { selectTab(AppListAdapter.Tab.BLOCKED) }
-        findViewById<View>(R.id.tab_allowed).setOnClickListener { selectTab(AppListAdapter.Tab.ALLOWED) }
+        findViewById<View>(R.id.tab_blocked).setOnClickListener { selectTab(HomeTab.BLOCKED) }
+        findViewById<View>(R.id.tab_allowed).setOnClickListener { selectTab(HomeTab.ALLOWED) }
         findViewById<View>(R.id.block_app).setOnClickListener {
             @Suppress("DEPRECATION")
             startActivityForResult(Intent(this, PickerActivity::class.java), REQUEST_PICK)
@@ -110,9 +121,9 @@ class MainActivity : Activity() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
-                adapter.setQuery(s?.toString().orEmpty())
+                query = s?.toString().orEmpty()
                 findViewById<View>(R.id.search_clear).visibility = if (s.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
-                updateEmptyState()
+                render()
             }
         })
 
@@ -120,11 +131,10 @@ class MainActivity : Activity() {
             isChecked = settings.screenPrefs.showSystemApps
             setOnCheckedChangeListener { _, show ->
                 settings.setShowSystemApps(show)
-                adapter.setShowSystem(show)
-                refreshState()
+                render()
             }
         }
-        selectTab(AppListAdapter.Tab.BLOCKED)
+        selectTab(HomeTab.BLOCKED)
 
         // The service may have died (app update, killed by Android) while the firewall was on.
         if (settings.policy.enabled) {
@@ -168,8 +178,8 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         // The firewall's state changes in the service (revoked, failed, started): show it live.
-        statusSubscription = appWall.firewallStatus.changed.subscribe(::refreshState)
-        statsLoader.start(appWall.logChanged)
+        statusSubscription = appWall.firewallStatus.changed.subscribe(::render)
+        statsLoader.start(appWall.logChanged, settings.policyChanged)
     }
 
     override fun onStop() {
@@ -182,18 +192,17 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         // Reload the list if apps were installed or removed while we were away.
-        if (appsLoaded && packageManager.getChangedPackages(packagesSequence) != null) loadApps()
-        refreshState()
+        if (apps != null && packageManager.getChangedPackages(packagesSequence) != null) loadApps()
+        render()
     }
 
     private fun loadApps() {
         val sequence = packageManager.getChangedPackages(0)?.sequenceNumber ?: 0
         appWall.apps.load { loaded ->
-            adapter.setApps(loaded)
+            if (apps == null) revealList()
+            apps = loaded
             packagesSequence = sequence
-            if (!appsLoaded) revealList()
-            appsLoaded = true
-            refreshState()
+            render()
         }
     }
 
@@ -201,7 +210,7 @@ class MainActivity : Activity() {
     private fun requestStart() {
         if (appWall.anotherVpnActive()) {
             showOtherVpnDialog()
-            refreshState() // flips the switch back off
+            render() // flips the switch back off
             return
         }
         val consent = VpnService.prepare(this)
@@ -230,7 +239,7 @@ class MainActivity : Activity() {
         // While another app holds Always-on, Android closes the consent dialog before anyone
         // could tap it, and offers no API to ask who holds it. A refusal that fast means that.
         if (SystemClock.elapsedRealtime() - consentRequestedAt < INSTANT_REFUSAL_MS) showOtherVpnDialog()
-        refreshState()
+        render()
     }
 
     /** Explains that Android allows one VPN at a time and another app has it. */
@@ -247,7 +256,7 @@ class MainActivity : Activity() {
 
     private fun startFirewall() {
         appWall.firewall.turnOn()
-        refreshState()
+        render()
         requestNotificationPermission()
     }
 
@@ -268,13 +277,13 @@ class MainActivity : Activity() {
 
     private fun stopFirewall() {
         appWall.firewall.turnOff()
-        refreshState()
+        render()
     }
 
     /** The running service applies rule changes itself; this just updates the screen. */
     private fun onRulesChanged() {
-        adapter.refresh()
-        refreshState()
+        render()
+        statsLoader.reload() // an open row's details depend on whether the app is blocked
     }
 
     /** A button in a row: change the app's rule (with a few seconds to undo it), or open its log. */
@@ -302,9 +311,9 @@ class MainActivity : Activity() {
         if (packages.isEmpty()) return
         appWall.firewall.setBlocked(packages, true)
         onRulesChanged()
-        selectTab(AppListAdapter.Tab.BLOCKED)
+        selectTab(HomeTab.BLOCKED)
         val message = if (packages.size == 1) {
-            val label = adapter.labelOf(packages[0]) ?: packages[0]
+            val label = apps?.firstOrNull { it.packageName == packages[0] }?.label ?: packages[0]
             getString(R.string.undo_blocked, label)
         } else {
             resources.getQuantityString(R.plurals.undo_blocked_n, packages.size, packages.size)
@@ -326,21 +335,20 @@ class MainActivity : Activity() {
     /** Tapping a row opens it in place to show what's known about the app; tapping again closes it. */
     private fun onAppTapped(app: AppEntry) {
         adapter.toggleExpanded(app)
-        if (adapter.expandedPackage != null) refreshStats() // loads the open row's details
+        if (adapter.expandedPackage != null) statsLoader.reload() // loads the open row's details
     }
 
-    private fun selectTab(tab: AppListAdapter.Tab) {
-        adapter.tab = tab
-        val blocked = tab == AppListAdapter.Tab.BLOCKED
+    private fun selectTab(tab: HomeTab) {
+        this.tab = tab
+        val blocked = tab == HomeTab.BLOCKED
         findViewById<View>(R.id.tab_blocked).isSelected = blocked
         findViewById<View>(R.id.tab_allowed).isSelected = !blocked
         findViewById<View>(R.id.column_today).visibility = if (blocked) View.VISIBLE else View.GONE
         findViewById<View>(R.id.show_system).visibility = if (blocked) View.GONE else View.VISIBLE
         findViewById<View>(R.id.block_app).visibility = if (blocked) View.VISIBLE else View.GONE
         findViewById<ListView>(R.id.app_list).setSelection(0)
-        if (tab != AppListAdapter.Tab.SEARCH) tabBeforeSearch = tab
-        refreshTabs()
-        updateEmptyState()
+        if (tab != HomeTab.SEARCH) tabBeforeSearch = tab
+        render()
     }
 
     /**
@@ -348,10 +356,10 @@ class MainActivity : Activity() {
      * The back arrow, or the phone's back gesture, returns to the tab you were on.
      */
     private fun enterSearch() {
-        if (adapter.tab == AppListAdapter.Tab.SEARCH) return
+        if (tab == HomeTab.SEARCH) return
         setSearchMode(true)
-        adapter.tab = AppListAdapter.Tab.SEARCH
-        updateEmptyState()
+        tab = HomeTab.SEARCH
+        render()
         search.requestFocus()
         getSystemService(InputMethodManager::class.java).showSoftInput(search, InputMethodManager.SHOW_IMPLICIT)
     }
@@ -370,12 +378,12 @@ class MainActivity : Activity() {
             findViewById<View>(id).visibility = normal
         }
         findViewById<View>(R.id.search_bar).visibility = if (searching) View.VISIBLE else View.GONE
-        if (!searching && adapter.tab != AppListAdapter.Tab.BLOCKED) findViewById<View>(R.id.block_app).visibility = View.GONE
+        if (!searching && tab != HomeTab.BLOCKED) findViewById<View>(R.id.block_app).visibility = View.GONE
     }
 
     @Deprecated("Platform back handling; still delivered when no back callback is registered")
     override fun onBackPressed() {
-        if (adapter.tab == AppListAdapter.Tab.SEARCH) exitSearch() else {
+        if (tab == HomeTab.SEARCH) exitSearch() else {
             @Suppress("DEPRECATION")
             super.onBackPressed()
         }
@@ -392,28 +400,6 @@ class MainActivity : Activity() {
         findViewById<View>(R.id.app_list).animate().alpha(1f)
     }
 
-    private fun updateEmptyState() {
-        val empty = findViewById<TextView>(R.id.list_empty)
-        val show = appsLoaded && adapter.count == 0
-        empty.visibility = if (show) View.VISIBLE else View.GONE
-        if (!show) return
-        empty.setText(
-            when {
-                adapter.tab == AppListAdapter.Tab.SEARCH && search.text.isBlank() -> R.string.search_prompt
-                adapter.tab == AppListAdapter.Tab.SEARCH -> R.string.empty_search
-                adapter.tab == AppListAdapter.Tab.BLOCKED -> R.string.empty_blocked
-                else -> R.string.empty_allowed
-            }
-        )
-    }
-
-    private fun startOfToday(): Long = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
-
     private fun sendToService(action: String) {
         startService(Intent(this, FirewallVpnService::class.java).setAction(action))
     }
@@ -428,68 +414,54 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun refreshState() {
+    /** Draws the screen from its current inputs. */
+    private fun render() {
+        val status = appWall.firewallStatus.status
+        val state = homeState(
+            apps, settings.policy, settings.screenPrefs.showSystemApps, status, appWall.anotherVpnActive(), stats, tab, query,
+        )
+        adapter.show(state)
+
         updatingSwitch = true
-        firewallSwitch.isChecked = settings.policy.enabled
+        firewallSwitch.isChecked = state.switchOn
         updatingSwitch = false
 
-        // The switch says what the user chose; the card says what the firewall is actually doing.
-        val on = appWall.firewallStatus.status.running
-        val blockedCount = if (appsLoaded) adapter.blockedCount() else settings.policy.blocked.size
-        findViewById<ImageView>(R.id.status_dot).setImageLevel(if (on) 1 else 0)
-        findViewById<TextView>(R.id.wall_state).setText(if (on) R.string.wall_up else R.string.wall_down)
-        findViewById<TextView>(R.id.headline).text = when {
-            !on -> getString(R.string.headline_down)
-            blockedCount == 0 -> getString(R.string.headline_none)
-            else -> resources.getQuantityString(R.plurals.headline_blocked, blockedCount, blockedCount)
+        // The card says what the firewall is actually doing.
+        findViewById<ImageView>(R.id.status_dot).setImageLevel(if (state.running) 1 else 0)
+        findViewById<TextView>(R.id.wall_state).setText(if (state.running) R.string.wall_up else R.string.wall_down)
+        findViewById<TextView>(R.id.headline).text = when (val headline = state.headline) {
+            Headline.Down -> getString(R.string.headline_down)
+            Headline.NothingBlocked -> getString(R.string.headline_none)
+            is Headline.Blocking -> resources.getQuantityString(R.plurals.headline_blocked, headline.apps, headline.apps)
         }
-        refreshTabs()
-        refreshStats()
-    }
-
-    /** The parts that change as attempts come in: today's total, the sparkline, last attempt, counts. */
-    private fun refreshStats() = statsLoader.reload()
-
-    /** The log numbers Home shows, read together on the database thread. */
-    private class HomeStats(
-        val now: Long,
-        val today: Map<String?, Int>,
-        val sparkline: IntArray,
-        val lastAttempt: Long?,
-        val details: AppListAdapter.Details?,
-    )
-
-    private fun showStats(stats: HomeStats) {
-        val now = stats.now
-        val today = stats.today
-        adapter.setAttemptsToday(today)
-        adapter.details = stats.details
-        val total = today.values.sum()
-        val blockedCount = if (appsLoaded) adapter.blockedCount() else settings.policy.blocked.size
-
-        val firewall = appWall.firewallStatus.status.firewall
-        findViewById<TextView>(R.id.attempts_today).text = when {
-            firewall !is FirewallState.Off -> withMonoNumber(resources.getQuantityString(R.plurals.attempts_today, total, total), total.toString())
-            appWall.anotherVpnActive() -> getString(R.string.status_other_vpn_short)
-            firewall.reason == OffReason.TUNNEL_FAILED -> getString(R.string.status_off_failed)
-            firewall.reason == OffReason.REVOKED -> getString(R.string.status_off_revoked)
-            firewall.reason == OffReason.NO_PERMISSION -> getString(R.string.status_off_no_permission)
-            else -> resources.getQuantityString(R.plurals.turn_on_to_block, blockedCount, blockedCount)
+        findViewById<TextView>(R.id.attempts_today).text = when (val line = state.cardLine) {
+            is CardLine.AttemptsToday ->
+                withMonoNumber(resources.getQuantityString(R.plurals.attempts_today, line.attempts, line.attempts), line.attempts.toString())
+            CardLine.OtherVpn -> getString(R.string.status_other_vpn_short)
+            CardLine.Failed -> getString(R.string.status_off_failed)
+            CardLine.Revoked -> getString(R.string.status_off_revoked)
+            CardLine.NoPermission -> getString(R.string.status_off_no_permission)
+            is CardLine.TurnOnToBlock -> resources.getQuantityString(R.plurals.turn_on_to_block, line.apps, line.apps)
         }
         findViewById<SparklineView>(R.id.sparkline).apply {
-            values = stats.sparkline
+            values = state.sparkline.toIntArray()
             contentDescription = getString(R.string.sparkline_description)
         }
-        findViewById<TextView>(R.id.last_attempt).text = TimeText.shortAgo(this, stats.lastAttempt, now)
-        findViewById<TextView>(R.id.allowed_count).text = if (appsLoaded) adapter.allowedCount().toString() else "—"
-        updateEmptyState()
-    }
+        findViewById<TextView>(R.id.last_attempt).text = TimeText.shortAgo(this, state.lastAttempt, System.currentTimeMillis())
+        findViewById<TextView>(R.id.allowed_count).text = state.allowedCount?.toString() ?: "—"
+        findViewById<TextView>(R.id.tab_blocked).text = tabLabel(R.string.tab_blocked, state.blockedCount)
+        findViewById<TextView>(R.id.tab_allowed).text = tabLabel(R.string.tab_allowed, state.allowedCount)
 
-    private fun refreshTabs() {
-        val blocked = if (appsLoaded) adapter.blockedCount() else settings.policy.blocked.size
-        val allowed = adapter.allowedCount()
-        findViewById<TextView>(R.id.tab_blocked).text = tabLabel(R.string.tab_blocked, blocked)
-        findViewById<TextView>(R.id.tab_allowed).text = tabLabel(R.string.tab_allowed, if (appsLoaded) allowed else null)
+        findViewById<TextView>(R.id.list_empty).apply {
+            visibility = if (state.empty == HomeEmpty.NONE) View.GONE else View.VISIBLE
+            when (state.empty) {
+                HomeEmpty.NONE -> Unit
+                HomeEmpty.SEARCH_PROMPT -> setText(R.string.search_prompt)
+                HomeEmpty.NO_MATCH -> setText(R.string.empty_search)
+                HomeEmpty.NO_BLOCKED -> setText(R.string.empty_blocked)
+                HomeEmpty.NO_ALLOWED -> setText(R.string.empty_allowed)
+            }
+        }
     }
 
     /** "Blocked 5", with the count in Geist Mono, secondary color. */
