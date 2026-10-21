@@ -29,6 +29,8 @@ class LogActivity : Activity() {
     private val adapter = AppsAdapter()
     /** What's on screen, handed to the rebuilt screen on rotation so it doesn't start empty. */
     private var shown: LogState? = null
+    /** The summary and column titles, when they scroll with the list (see [scrollWithList]). */
+    private var header: View? = null
 
     /** Reloads whenever the log changes, while the screen is visible. */
     private val loader by lazy {
@@ -48,6 +50,7 @@ class LogActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_log)
+        fitWidth()
         icons = AppIcons(this)
 
         findViewById<View>(R.id.log_back).setOnClickListener { finish() }
@@ -55,10 +58,15 @@ class LogActivity : Activity() {
         val openSettings = View.OnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
         findViewById<View>(R.id.log_footer).setOnClickListener(openSettings)
         findViewById<View>(R.id.log_open_settings).setOnClickListener(openSettings)
+        header = scrollWithList(
+            findViewById(R.id.log_list),
+            above = listOf(findViewById(R.id.log_summary), findViewById(R.id.log_columns)),
+        )
         findViewById<ListView>(R.id.log_list).apply {
             adapter = this@LogActivity.adapter
-            setOnItemClickListener { _, _, position, _ ->
-                startActivity(AppLogActivity.intent(this@LogActivity, this@LogActivity.adapter.getItem(position).packageName))
+            setOnItemClickListener { parent, _, position, _ ->
+                val app = parent.getItemAtPosition(position) as? AppSummary ?: return@setOnItemClickListener
+                startActivity(AppLogActivity.intent(this@LogActivity, app.packageName))
             }
         }
         (lastNonConfigurationInstance as? LogState)?.let(::render)
@@ -96,32 +104,35 @@ class LogActivity : Activity() {
 
         val hasEntries = state.empty == LogEmpty.NONE
         listOf(R.id.log_summary, R.id.log_columns, R.id.log_list, R.id.log_clear).forEach {
-            findViewById<View>(it).visibility = if (hasEntries) View.VISIBLE else View.GONE
+            view<View>(it).visibility = if (hasEntries) View.VISIBLE else View.GONE
         }
-        findViewById<View>(R.id.log_empty).visibility = if (hasEntries) View.GONE else View.VISIBLE
-        findViewById<TextView>(R.id.log_footer).text = if (state.loggingEnabled) {
+        view<View>(R.id.log_empty).visibility = if (hasEntries) View.GONE else View.VISIBLE
+        view<TextView>(R.id.log_footer).text = if (state.loggingEnabled) {
             resources.getQuantityString(R.plurals.log_footer, days, days)
         } else {
             getString(R.string.log_footer_off)
         }
         if (!hasEntries) {
             val off = state.empty == LogEmpty.LOGGING_OFF
-            findViewById<TextView>(R.id.log_empty_title).setText(if (off) R.string.log_off_title else R.string.log_empty_title)
-            findViewById<TextView>(R.id.log_empty_body).setText(if (off) R.string.log_off_body else R.string.log_empty_body)
-            findViewById<View>(R.id.log_open_settings).visibility = if (off) View.VISIBLE else View.GONE
+            view<TextView>(R.id.log_empty_title).setText(if (off) R.string.log_off_title else R.string.log_empty_title)
+            view<TextView>(R.id.log_empty_body).setText(if (off) R.string.log_off_body else R.string.log_empty_body)
+            view<View>(R.id.log_open_settings).visibility = if (off) View.VISIBLE else View.GONE
             return
         }
 
-        findViewById<TextView>(R.id.log_today).text = state.todayAttempts.toString()
-        findViewById<TextView>(R.id.log_period).text = state.periodAttempts.toString()
-        findViewById<TextView>(R.id.log_period_label).text = resources.getQuantityString(R.plurals.log_stat_period, days, days)
-        findViewById<TextView>(R.id.log_apps).text = state.apps.size.toString()
-        findViewById<TextView>(R.id.log_column_app).text = resources.getQuantityString(R.plurals.log_column_app, days, days)
-        findViewById<SparklineView>(R.id.log_chart).apply {
+        view<TextView>(R.id.log_today).text = state.todayAttempts.toString()
+        view<TextView>(R.id.log_period).text = state.periodAttempts.toString()
+        view<TextView>(R.id.log_period_label).text = resources.getQuantityString(R.plurals.log_stat_period, days, days)
+        view<TextView>(R.id.log_apps).text = state.apps.size.toString()
+        view<TextView>(R.id.log_column_app).text = resources.getQuantityString(R.plurals.log_column_app, days, days)
+        view<SparklineView>(R.id.log_chart).apply {
             values = state.hourly.toIntArray()
             contentDescription = getString(R.string.log_chart_description, state.hourly.sum())
         }
     }
+
+    /** A view of this screen, wherever it is now: in the layout, or in the list's header. */
+    private fun <T : View> view(id: Int): T = findViewById(id) ?: header?.findViewById(id) ?: error("No view $id")
 
     private inner class AppsAdapter : BaseAdapter() {
         var apps: List<AppSummary> = emptyList()

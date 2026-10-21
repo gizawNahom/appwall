@@ -35,6 +35,8 @@ class MainActivity : Activity() {
     private lateinit var firewallSwitch: Switch
     private lateinit var icons: AppIcons
     private lateinit var search: EditText
+    /** The status card: above the list, or inside it on a short window (see [scrollWithList]). */
+    private lateinit var card: View
 
     // The screen's inputs; render() turns them into a HomeState and draws it.
     private var apps: List<AppEntry>? = null
@@ -70,6 +72,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        fitWidth()
         icons = AppIcons(this)
 
         findViewById<View>(R.id.open_settings).setOnClickListener {
@@ -90,11 +93,14 @@ class MainActivity : Activity() {
             if (on) requestStart() else stopFirewall()
         }
 
+        card = findViewById(R.id.status_card)
         adapter = AppListAdapter(this, icons) { app, action -> onRowAction(app, action) }
         findViewById<ListView>(R.id.app_list).apply {
+            scrollWithList(this, above = listOf(card))
             adapter = this@MainActivity.adapter
-            setOnItemClickListener { _, _, position, _ ->
-                val row = this@MainActivity.adapter.getItem(position) as? HomeItem.Row ?: return@setOnItemClickListener
+            // Positions count the card too when it scrolls with the list: ask the list, not the adapter.
+            setOnItemClickListener { parent, _, position, _ ->
+                val row = parent.getItemAtPosition(position) as? HomeItem.Row ?: return@setOnItemClickListener
                 val ticked = selected
                 when {
                     ticked == null -> onRowAction(row.app, AppListAdapter.Action.OPEN)
@@ -105,8 +111,8 @@ class MainActivity : Activity() {
                 }
             }
             // Long-press an allowed app to choose several to block at once.
-            setOnItemLongClickListener { _, _, position, _ ->
-                val row = this@MainActivity.adapter.getItem(position) as? HomeItem.Row
+            setOnItemLongClickListener { parent, _, position, _ ->
+                val row = parent.getItemAtPosition(position) as? HomeItem.Row
                 if (row == null || row.blocked || selected != null) return@setOnItemLongClickListener false
                 selected = mutableSetOf(row.app.packageName)
                 hideUndo.run()
@@ -418,10 +424,10 @@ class MainActivity : Activity() {
         updatingSwitch = false
 
         // The card says what the firewall is actually doing.
-        findViewById<ImageView>(R.id.status_dot).setImageLevel(if (state.running) 1 else 0)
-        findViewById<TextView>(R.id.wall_state).setText(if (state.running) R.string.wall_up else R.string.wall_off)
+        card.findViewById<ImageView>(R.id.status_dot).setImageLevel(if (state.running) 1 else 0)
+        card.findViewById<TextView>(R.id.wall_state).setText(if (state.running) R.string.wall_up else R.string.wall_off)
         val line = state.cardLine
-        findViewById<TextView>(R.id.status_line).apply {
+        card.findViewById<TextView>(R.id.status_line).apply {
             text = when (line) {
                 is CardLine.Blocking -> {
                     val blocked = resources.getQuantityString(R.plurals.headline_blocked, line.apps, line.apps)
@@ -442,7 +448,7 @@ class MainActivity : Activity() {
             // While off, blocked apps are online: that's worth the coral.
             setTextColor(getColor(if (line is CardLine.Blocking) R.color.text_secondary else R.color.blocked))
         }
-        findViewById<TextView>(R.id.health_notice).apply {
+        card.findViewById<TextView>(R.id.health_notice).apply {
             visibility = if (state.notices.isEmpty()) View.GONE else View.VISIBLE
             text = state.notices.joinToString(" · ") { notice ->
                 when (notice) {

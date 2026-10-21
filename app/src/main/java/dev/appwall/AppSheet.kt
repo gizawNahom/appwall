@@ -12,6 +12,8 @@ import android.view.Window
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import dev.appwall.core.screens.GUTTER_DP
+import dev.appwall.core.screens.MAX_CONTENT_DP
 
 /**
  * AppWall's one way to ask something: a bottom sheet with a small [label], a [title], a [body],
@@ -48,7 +50,7 @@ class AppSheet(
             setContentView(view)
             window?.apply {
                 setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-                setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                setLayout(sheetWidth(activity), ViewGroup.LayoutParams.WRAP_CONTENT)
                 setGravity(Gravity.BOTTOM)
                 setDimAmount(0.55f)
                 setWindowAnimations(android.R.style.Animation_InputMethod) // rises from the bottom edge
@@ -88,6 +90,12 @@ class AppSheet(
             row.addView(button, params)
         }
         dialog.show()
+    }
+
+    /** Edge to edge on a phone; on a wide window, as wide as the screen's content. */
+    private fun sheetWidth(activity: Activity): Int {
+        if (activity.fit.sideGutterDp == GUTTER_DP) return ViewGroup.LayoutParams.MATCH_PARENT
+        return activity.dp(MAX_CONTENT_DP + 2 * GUTTER_DP)
     }
 
     private fun button(activity: Activity, choice: Choice) = Button(activity).apply {

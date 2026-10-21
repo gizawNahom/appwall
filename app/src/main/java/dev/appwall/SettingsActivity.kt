@@ -30,6 +30,9 @@ class SettingsActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
+        // The rows scroll under a full-width scrollbar; only their content is centered.
+        fitWidth(findViewById(R.id.settings_header))
+        fitWidth(findViewById(R.id.settings_content))
         findViewById<View>(R.id.settings_back).setOnClickListener { finish() }
 
         // Firewall

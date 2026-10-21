@@ -37,6 +37,8 @@ class AppLogActivity : Activity() {
     private val timeline = TimelineAdapter()
     /** What's on screen, handed to the rebuilt screen on rotation so it doesn't start empty. */
     private var shown: AppLogState? = null
+    /** The tabs and column titles, when they scroll with the list (see [scrollWithList]). */
+    private var header: View? = null
 
     /** Rebuilds the page's [AppLogState] whenever the log or the block rules change, while visible. */
     private val loader by lazy {
@@ -58,20 +60,25 @@ class AppLogActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_app_log)
+        fitWidth()
+        header = scrollWithList(
+            findViewById(R.id.app_log_list),
+            above = listOf(findViewById(R.id.app_log_tabs), findViewById(R.id.dest_columns)),
+        )
         packageName = intent.getStringExtra(EXTRA_PACKAGE)
         showTimeline = savedInstanceState?.getBoolean(STATE_TIMELINE) ?: false
 
         val pkg = packageName
         label = if (pkg == null) getString(R.string.unknown_app) else LogActivity.appLabel(this, pkg)
-        findViewById<TextView>(R.id.app_log_name).text = label
-        findViewById<ImageView>(R.id.app_log_icon).apply {
+        view<TextView>(R.id.app_log_name).text = label
+        view<ImageView>(R.id.app_log_icon).apply {
             if (pkg != null) setImageDrawable(AppIcons(this@AppLogActivity)[pkg]) else visibility = View.GONE
         }
-        findViewById<View>(R.id.app_log_back).setOnClickListener { finish() }
-        findViewById<View>(R.id.tab_destinations).setOnClickListener { selectTab(timeline = false) }
-        findViewById<View>(R.id.tab_timeline).setOnClickListener { selectTab(timeline = true) }
-        findViewById<Button>(R.id.app_log_toggle).visibility = View.INVISIBLE // until the first state arrives
-        findViewById<Button>(R.id.app_log_toggle).setOnClickListener {
+        view<View>(R.id.app_log_back).setOnClickListener { finish() }
+        view<View>(R.id.tab_destinations).setOnClickListener { selectTab(timeline = false) }
+        view<View>(R.id.tab_timeline).setOnClickListener { selectTab(timeline = true) }
+        view<Button>(R.id.app_log_toggle).visibility = View.INVISIBLE // until the first state arrives
+        view<Button>(R.id.app_log_toggle).setOnClickListener {
             // The page redraws when the policy change comes back through the loader.
             if (pkg != null) appWall.firewall.setBlocked(listOf(pkg), !settings.policy.isBlocked(pkg))
         }
@@ -98,21 +105,21 @@ class AppLogActivity : Activity() {
 
     private fun selectTab(timeline: Boolean) {
         showTimeline = timeline
-        findViewById<View>(R.id.tab_destinations).isSelected = !timeline
-        findViewById<View>(R.id.tab_timeline).isSelected = timeline
-        findViewById<View>(R.id.dest_columns).visibility = if (timeline) View.GONE else View.VISIBLE
-        findViewById<ListView>(R.id.app_log_list).adapter = if (timeline) this.timeline else destinations
+        view<View>(R.id.tab_destinations).isSelected = !timeline
+        view<View>(R.id.tab_timeline).isSelected = timeline
+        view<View>(R.id.dest_columns).visibility = if (timeline) View.GONE else View.VISIBLE
+        view<ListView>(R.id.app_log_list).adapter = if (timeline) this.timeline else destinations
         loader.reload()
     }
 
     private fun render(state: AppLogState) {
         shown = state
         // The "● BLOCKED" / "ALLOWED" tag and the button that flips it.
-        findViewById<TextView>(R.id.app_log_state).apply {
+        view<TextView>(R.id.app_log_state).apply {
             setText(if (state.blocked) R.string.state_blocked else R.string.state_allowed)
             setCompoundDrawablesRelativeWithIntrinsicBounds(if (state.blocked) R.drawable.dot_blocked else 0, 0, 0, 0)
         }
-        findViewById<Button>(R.id.app_log_toggle).apply {
+        view<Button>(R.id.app_log_toggle).apply {
             visibility = if (state.toggle == AppLogToggle.NONE) View.GONE else View.VISIBLE
             text = getString(if (state.toggle == AppLogToggle.ALLOW) R.string.app_log_allow else R.string.app_log_block, label)
         }
@@ -120,12 +127,15 @@ class AppLogActivity : Activity() {
         destinations.state = state
         timeline.rows = state.timeline
         (if (state.showTimeline) timeline else destinations).notifyDataSetChanged()
-        findViewById<TextView>(R.id.tab_destinations).text =
+        view<TextView>(R.id.tab_destinations).text =
             FontSpan.labelWithCount(this, getString(R.string.log_tab_destinations), state.destinations.size)
-        findViewById<TextView>(R.id.dest_column).text =
+        view<TextView>(R.id.dest_column).text =
             resources.getQuantityString(R.plurals.dest_column, state.retentionDays, state.retentionDays)
-        findViewById<View>(R.id.app_log_empty).visibility = if (state.empty) View.VISIBLE else View.GONE
+        view<View>(R.id.app_log_empty).visibility = if (state.empty) View.VISIBLE else View.GONE
     }
+
+    /** A view of this screen, wherever it is now: in the layout, or in the list's header. */
+    private fun <T : View> view(id: Int): T = findViewById(id) ?: header?.findViewById(id) ?: error("No view $id")
 
     private inner class DestinationsAdapter : BaseAdapter() {
         var state: AppLogState? = null
