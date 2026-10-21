@@ -15,13 +15,15 @@ import dev.appwall.core.log.LogWrite
  * 3.18 (Android 8) supports.
  *
  * Used only on the database thread, which [onDbThread] recognizes; any other caller fails loudly
- * rather than racing it. That one thread is also why nothing here needs a lock.
+ * rather than racing it. That one thread is also why nothing here needs a lock. Every committed
+ * change (a batch, a prune, a clear) calls [changed] once.
  */
 class SqlBlockLog(
     private val db: SqlDb,
     private val retentionDays: () -> Int,
     private val clock: () -> Long = System::currentTimeMillis,
     private val onDbThread: () -> Boolean,
+    private val changed: () -> Unit = {},
 ) {
     private val merger = LogMerger()
     private var insertsSincePrune = 0
@@ -36,6 +38,7 @@ class SqlBlockLog(
             merger.clear() // it may name rows the rollback took away
             throw e
         }
+        changed()
     }
 
     private fun write(attempt: BlockedTry) {
@@ -149,12 +152,14 @@ class SqlBlockLog(
     fun prune() {
         checkThread()
         db.execute("DELETE FROM log WHERE time < ?", listOf(clock() - retentionMs()))
+        changed()
     }
 
     fun clear() {
         checkThread()
         db.execute("DELETE FROM log")
         merger.clear()
+        changed()
     }
 
     private fun checkThread() = check(onDbThread()) { "The block log is used only on the database thread" }

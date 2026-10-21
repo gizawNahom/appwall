@@ -20,7 +20,8 @@ class SqlBlockLogTest {
     private var now = START
     private var retentionDays = 7
     private val testThread = Thread.currentThread()
-    private val log = SqlBlockLog(db, { retentionDays }, { now }, onDbThread = { Thread.currentThread() === testThread })
+    private var changes = 0
+    private val log = SqlBlockLog(db, { retentionDays }, { now }, onDbThread = { Thread.currentThread() === testThread }, changed = { changes++ })
 
     @After
     fun closeDb() = db.jdbc.close()
@@ -38,6 +39,7 @@ class SqlBlockLogTest {
         log.record(tries)
         assertEquals(1, db.transactions)
         assertEquals(0, db.writesOutsideTransactions)
+        assertEquals(1, changes) // one signal per batch, not per try
         assertEquals(3, rows())
         now += 30_000
         assertEquals(listOf(1, 3), log.summaries().map { it.attempts }.sorted())
@@ -49,6 +51,7 @@ class SqlBlockLogTest {
         db.failAfterWrites = 1
         val batch = listOf(BlockedTry(CHROME, tcp("1.2.3.4", 443), now + 1), BlockedTry(OTHER, tcp("5.6.7.8", 443), now + 2))
         assertThrows(IllegalStateException::class.java) { log.record(batch) }
+        assertEquals(1, changes) // only the first, committed write said so
         db.failAfterWrites = null
         assertEquals(listOf(1), log.summaries().map { it.attempts })
         record(OTHER, tcp("5.6.7.8", 443)) // must be inserted, not "bump" a rolled-back row

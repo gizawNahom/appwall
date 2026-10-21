@@ -4,8 +4,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.text.format.DateUtils
 import android.view.View
 import android.view.ViewGroup
@@ -33,12 +31,13 @@ class AppLogActivity : Activity() {
     private val destinations = DestinationsAdapter()
     private val timeline = TimelineAdapter()
 
-    private val handler = Handler(Looper.getMainLooper())
-    private val refresher = object : Runnable {
-        override fun run() {
-            reload()
-            handler.postDelayed(this, REFRESH_MS)
-        }
+    /** Reloads whenever the log changes, while the screen is visible. */
+    private val loader by lazy {
+        logLoader({
+            val pkg = packageName
+            val withTimeline = showTimeline
+            fun(log: SqlBlockLog) = log.destinations(pkg) to (if (withTimeline) log.entriesFor(pkg) else null)
+        }) { (places, entries) -> show(places, entries) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,14 +72,14 @@ class AppLogActivity : Activity() {
         selectTab(showTimeline)
     }
 
-    override fun onResume() {
-        super.onResume()
-        handler.post(refresher)
+    override fun onStart() {
+        super.onStart()
+        loader.start(appWall.logChanged)
     }
 
-    override fun onPause() {
-        handler.removeCallbacks(refresher)
-        super.onPause()
+    override fun onStop() {
+        loader.stop()
+        super.onStop()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -106,15 +105,7 @@ class AppLogActivity : Activity() {
         findViewById<View>(R.id.tab_timeline).isSelected = timeline
         findViewById<View>(R.id.dest_columns).visibility = if (timeline) View.GONE else View.VISIBLE
         findViewById<ListView>(R.id.app_log_list).adapter = if (timeline) this.timeline else destinations
-        reload()
-    }
-
-    private fun reload() {
-        val pkg = packageName
-        val withTimeline = showTimeline
-        onDb({ log -> log.destinations(pkg) to (if (withTimeline) log.entriesFor(pkg) else null) }) { (places, entries) ->
-            show(places, entries)
-        }
+        loader.reload()
     }
 
     private fun show(places: List<Destination>, entries: List<LogEntry>?) {
@@ -211,7 +202,6 @@ class AppLogActivity : Activity() {
     companion object {
         private const val EXTRA_PACKAGE = "dev.appwall.LOG_PACKAGE"
         private const val STATE_TIMELINE = "timeline"
-        private const val REFRESH_MS = 2000L
 
         /** Opens the log of [packageName], or of unattributed traffic when null. */
         fun intent(context: Context, packageName: String?): Intent =

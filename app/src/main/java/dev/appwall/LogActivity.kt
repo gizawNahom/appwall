@@ -5,8 +5,6 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.widget.BaseAdapter
@@ -26,12 +24,14 @@ class LogActivity : Activity() {
     private lateinit var icons: AppIcons
     private val adapter = AppsAdapter()
 
-    private val handler = Handler(Looper.getMainLooper())
-    private val refresher = object : Runnable {
-        override fun run() {
-            reload()
-            handler.postDelayed(this, REFRESH_MS)
-        }
+    /** Reloads whenever the log changes, while the screen is visible. */
+    private val loader by lazy {
+        logLoader({
+            val now = System.currentTimeMillis()
+            val startOfToday = startOfToday()
+            fun(log: SqlBlockLog) =
+                LogStats(log.summaries(), log.attemptsSince(startOfToday).values.sum(), log.attemptsPerBucket(now - DAY_MS, HOUR_MS, 24))
+        }, ::show)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,31 +53,23 @@ class LogActivity : Activity() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        handler.post(refresher)
+    override fun onStart() {
+        super.onStart()
+        loader.start(appWall.logChanged)
     }
 
-    override fun onPause() {
-        handler.removeCallbacks(refresher)
-        super.onPause()
+    override fun onStop() {
+        loader.stop()
+        super.onStop()
     }
 
     private fun confirmClear() {
         AlertDialog.Builder(this)
             .setTitle(R.string.log_clear_title)
             .setMessage(R.string.log_clear_text)
-            .setPositiveButton(R.string.log_clear) { _, _ -> onDb({ it.clear() }) { reload() } }
+            .setPositiveButton(R.string.log_clear) { _, _ -> onDb({ it.clear() }) {} }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
-    }
-
-    private fun reload() {
-        val now = System.currentTimeMillis()
-        val startOfToday = startOfToday()
-        onDb({ log ->
-            LogStats(log.summaries(), log.attemptsSince(startOfToday).values.sum(), log.attemptsPerBucket(now - DAY_MS, HOUR_MS, 24))
-        }, ::show)
     }
 
     /** The numbers the log screen shows, read together on the database thread. */
@@ -156,7 +148,6 @@ class LogActivity : Activity() {
     }
 
     companion object {
-        private const val REFRESH_MS = 2000L
         private const val HOUR_MS = 60 * 60 * 1000L
         private const val DAY_MS = 24 * HOUR_MS
 

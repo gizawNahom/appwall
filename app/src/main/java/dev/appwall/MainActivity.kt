@@ -40,13 +40,22 @@ class MainActivity : Activity() {
     private var undo: (() -> Unit)? = null
     private val hideUndo = Runnable { findViewById<View>(R.id.undo_bar).visibility = View.GONE }
 
-    /** Keeps the card's numbers and the list's counts current while the screen is visible. */
     private val handler = Handler(Looper.getMainLooper())
-    private val statsRefresher = object : Runnable {
-        override fun run() {
-            refreshStats()
-            handler.postDelayed(this, STATS_REFRESH_MS)
-        }
+
+    /** Keeps the card's numbers and the list's counts current while the screen is visible. */
+    private val statsLoader by lazy {
+        logLoader({
+            val now = System.currentTimeMillis()
+            val startOfToday = startOfToday()
+            val expanded = adapter.expandedPackage
+            fun(log: SqlBlockLog) = HomeStats(
+                now = now,
+                today = log.attemptsSince(startOfToday),
+                sparkline = log.attemptsPerBucket(now - DAY_MS, DAY_MS / SPARK_BARS, SPARK_BARS),
+                lastAttempt = log.lastAttemptTime(),
+                details = expanded?.let { AppListAdapter.loadDetails(log, it, now) },
+            )
+        }, ::showStats)
     }
     private var updatingSwitch = false
     private var appsLoaded = false
@@ -161,9 +170,11 @@ class MainActivity : Activity() {
         super.onStart()
         // The firewall's state changes in the service (revoked, failed, started): show it live.
         statusSubscription = appWall.firewallStatus.changed.subscribe(::refreshState)
+        statsLoader.start(appWall.logChanged)
     }
 
     override fun onStop() {
+        statsLoader.stop()
         statusSubscription?.unsubscribe()
         statusSubscription = null
         super.onStop()
@@ -174,12 +185,6 @@ class MainActivity : Activity() {
         // Reload the list if apps were installed or removed while we were away.
         if (appsLoaded && packageManager.getChangedPackages(packagesSequence) != null) loadApps()
         refreshState()
-        handler.post(statsRefresher)
-    }
-
-    override fun onPause() {
-        handler.removeCallbacks(statsRefresher)
-        super.onPause()
     }
 
     private fun loadApps() {
@@ -446,29 +451,19 @@ class MainActivity : Activity() {
     }
 
     /** The parts that change as attempts come in: today's total, the sparkline, last attempt, counts. */
-    private fun refreshStats() {
-        val now = System.currentTimeMillis()
-        val startOfToday = startOfToday()
-        val expanded = adapter.expandedPackage
-        onDb({ log ->
-            HomeStats(
-                today = log.attemptsSince(startOfToday),
-                sparkline = log.attemptsPerBucket(now - DAY_MS, DAY_MS / SPARK_BARS, SPARK_BARS),
-                lastAttempt = log.lastAttemptTime(),
-                details = expanded?.let { AppListAdapter.loadDetails(log, it, now) },
-            )
-        }) { stats -> showStats(stats, now) }
-    }
+    private fun refreshStats() = statsLoader.reload()
 
     /** The log numbers Home shows, read together on the database thread. */
     private class HomeStats(
+        val now: Long,
         val today: Map<String?, Int>,
         val sparkline: IntArray,
         val lastAttempt: Long?,
         val details: AppListAdapter.Details?,
     )
 
-    private fun showStats(stats: HomeStats, now: Long) {
+    private fun showStats(stats: HomeStats) {
+        val now = stats.now
         val today = stats.today
         adapter.setAttemptsToday(today)
         adapter.details = stats.details
@@ -510,7 +505,6 @@ class MainActivity : Activity() {
         private const val REQUEST_VPN = 1
         private const val REQUEST_NOTIFICATIONS = 2
         private const val REQUEST_PICK = 3
-        private const val STATS_REFRESH_MS = 5000L
         private const val UNDO_MS = 5000L
         private const val DAY_MS = 24 * 60 * 60 * 1000L
         private const val SPARK_BARS = 12 // two-hour bars over the last day

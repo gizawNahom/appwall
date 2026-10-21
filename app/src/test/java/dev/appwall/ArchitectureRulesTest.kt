@@ -42,6 +42,16 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    fun screensWatchTheLogInsteadOfPolling() {
+        // Step 9: screens reload on logChanged; the only delayed tasks left are the undo bar's
+        // timeout and the main-thread scheduler itself.
+        val delayers = sources.filter { it.readText().contains("postDelayed(") }
+        assertEquals(listOf("AppWallApplication.kt", "MainActivity.kt"), delayers.map { it.name }.sorted())
+        val mainDelays = File("src/main/java/dev/appwall/MainActivity.kt").readLines().filter { "postDelayed(" in it }
+        assertEquals(listOf("handler.postDelayed(hideUndo, UNDO_MS)"), mainDelays.map { it.trim() })
+    }
+
+    @Test
     fun sourcesWereFound() {
         // Guards the rules above against passing vacuously if the source path is wrong.
         assertEquals(true, sources.any { it.name == "MainActivity.kt" })

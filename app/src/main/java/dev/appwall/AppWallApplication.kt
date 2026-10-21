@@ -12,6 +12,7 @@ import dev.appwall.core.log.TryQueue
 import dev.appwall.core.state.ChangeSignal
 import dev.appwall.core.state.FirewallStatusBoard
 import dev.appwall.core.state.Scheduler
+import dev.appwall.core.state.ScreenLoader
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -38,6 +39,10 @@ class AppWallApplication : Application() {
     lateinit var log: SqlBlockLog
         private set
 
+    /** Fires after each change to the log is committed; screens showing the log reload on it. */
+    lateinit var logChanged: ChangeSignal
+        private set
+
     /** Where the tunnel leaves blocked tries for the log; the database thread writes them within a second. */
     lateinit var tries: TryQueue
         private set
@@ -54,10 +59,12 @@ class AppWallApplication : Application() {
         super.onCreate()
         db = Executors.newSingleThreadScheduledExecutor { Thread(it, "appwall-db").also { thread -> dbThread = thread } }
         val rules = Rules(this)
+        logChanged = ChangeSignal(MainThreadScheduler)
         log = SqlBlockLog(
             AndroidSqlDb(this, SqlBlockLog.FILE, SqlBlockLog.VERSION, SqlBlockLog::create),
             retentionDays = { rules.logRetentionDays },
             onDbThread = { Thread.currentThread() === dbThread },
+            changed = logChanged::notifyChanged,
         )
         tries = TryQueue { db.schedule(::writeTries, 1, TimeUnit.SECONDS) }
         apps = InstalledAppsRepository(this, namedExecutor("appwall-apps"))
@@ -106,6 +113,21 @@ fun <T> Activity.onDb(work: (SqlBlockLog) -> T, show: (T) -> Unit) {
         }
         runOnUiThread { if (!isDestroyed) show(result) }
     }
+}
+
+/**
+ * A [ScreenLoader] that runs its queries with the block log on the database thread. [query] runs
+ * on the UI thread when a reload is asked for, and returns the work to do with the log.
+ */
+fun <T> Activity.logLoader(query: () -> (SqlBlockLog) -> T, show: (T) -> Unit): ScreenLoader<T> {
+    val app = appWall
+    return ScreenLoader(
+        worker = app.db,
+        ui = MainThreadScheduler,
+        onError = { Log.w("AppWall", "Block log query failed", it) },
+        prepare = { query().let { work -> { work(app.log) } } },
+        show = { if (!isDestroyed) show(it) },
+    )
 }
 
 /** Delivers on Android's main (UI) thread. */
