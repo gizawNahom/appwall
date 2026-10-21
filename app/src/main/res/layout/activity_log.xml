@@ -138,7 +138,7 @@
             android:layout_height="1dp"
             android:background="@color/line" />
 
-        <dev.appwall.SparklineView
+        <dev.appwall.log.SparklineView
             android:id="@+id/log_chart"
             android:layout_width="match_parent"
             android:layout_height="48dp"

@@ -1,9 +1,11 @@
-package dev.appwall
+package dev.appwall.home
 
 import android.app.Activity
+import dev.appwall.R
 import dev.appwall.core.apps.AppEntry
 import dev.appwall.core.screens.SystemAppWarning
 import dev.appwall.core.screens.joinNames
+import dev.appwall.ui.AppSheet
 
 /**
  * The sheet asked before blocking part of Android. What it offers comes from [SystemAppWarning]:

@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.settings
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -11,11 +11,19 @@ import android.widget.RadioGroup
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import dev.appwall.R
+import dev.appwall.appWall
 import dev.appwall.core.firewall.NewAppMode
 import dev.appwall.core.screens.AlwaysOnText
 import dev.appwall.core.screens.StatusLevel
 import dev.appwall.core.screens.settingsState
 import dev.appwall.core.state.Subscription
+import dev.appwall.firewall.FirewallVpnService
+import dev.appwall.log.LogActivity
+import dev.appwall.onDb
+import dev.appwall.ui.AppSheet
+import dev.appwall.ui.OpenSheet
+import dev.appwall.ui.fitWidth
 
 /** Settings; what it shows comes from [settingsState], and changes go to settings or commands. */
 class SettingsActivity : Activity() {

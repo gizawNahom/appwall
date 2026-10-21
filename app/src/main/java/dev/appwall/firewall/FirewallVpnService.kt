@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.firewall
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -18,6 +18,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import dev.appwall.R
+import dev.appwall.appWall
 import dev.appwall.core.firewall.DNS_SERVER
 import dev.appwall.core.firewall.TunnelPlan
 import dev.appwall.core.firewall.shouldReapply
@@ -29,6 +31,7 @@ import dev.appwall.core.state.FirewallStatus
 import dev.appwall.core.state.OffReason
 import dev.appwall.core.state.Subscription
 import dev.appwall.core.tunnel.TunnelSession
+import dev.appwall.home.HomeActivity
 
 /**
  * Blocks apps by routing only the blocked ones into a local tunnel that is read only for logging
@@ -250,7 +253,7 @@ class FirewallVpnService : VpnService() {
             NotificationChannel(CHANNEL_PROBLEMS, getString(R.string.channel_problems), NotificationManager.IMPORTANCE_DEFAULT)
         )
         val openApp = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
+            this, 0, Intent(this, HomeActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
         manager.notify(
             NOTIFICATION_STOPPED_ID,
@@ -281,7 +284,7 @@ class FirewallVpnService : VpnService() {
             resources.getQuantityString(R.plurals.status_on, blockedCount, blockedCount)
         }
         val openApp = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
+            this, 0, Intent(this, HomeActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
         val notification = Notification.Builder(this, CHANNEL_STATUS)
             .setSmallIcon(R.drawable.ic_notification)

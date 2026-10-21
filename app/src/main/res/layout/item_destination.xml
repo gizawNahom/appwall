@@ -33,7 +33,7 @@
             android:textAppearance="@style/TextAppearance.AppWall.Caption" />
     </LinearLayout>
 
-    <dev.appwall.MeterView
+    <dev.appwall.log.MeterView
         android:id="@+id/dest_meter"
         android:layout_width="48dp"
         android:layout_height="4dp"

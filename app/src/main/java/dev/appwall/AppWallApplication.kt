@@ -9,6 +9,7 @@ import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import dev.appwall.apps.InstalledAppsRepository
 import dev.appwall.core.log.TryQueue
 import dev.appwall.core.firewall.FirewallCommands
 import dev.appwall.core.health.StartupChecks
@@ -21,6 +22,10 @@ import dev.appwall.core.state.ChangeSignal
 import dev.appwall.core.state.FirewallStatusBoard
 import dev.appwall.core.state.Scheduler
 import dev.appwall.core.state.ScreenLoader
+import dev.appwall.firewall.FirewallVpnService
+import dev.appwall.storage.AndroidSqlDb
+import dev.appwall.storage.PrefsStore
+import dev.appwall.storage.SqlBlockLog
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -30,6 +35,9 @@ import java.util.concurrent.TimeUnit
  * Builds AppWall's shared objects once per process and hands them out: screens, the service and
  * receivers ask for them here instead of reaching for globals. Kept light, since it runs on every
  * process start, boot included: nothing here touches the disk until first used.
+ *
+ * The rest of :app sits by role (firewall, storage, apps) and by screen (home, log, settings),
+ * with view pieces several screens share in ui.
  */
 class AppWallApplication : Application() {
 
@@ -185,7 +193,7 @@ fun <T> Activity.logLoader(query: () -> (SqlBlockLog) -> T, show: (T) -> Unit): 
 }
 
 /** Delivers on Android's main (UI) thread. */
-object MainThreadScheduler : Scheduler {
+private object MainThreadScheduler : Scheduler {
     private val handler = Handler(Looper.getMainLooper())
     override fun post(task: () -> Unit) {
         handler.post(task)

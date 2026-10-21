@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.ui
 
 import android.app.Activity
 import android.view.View
@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import android.widget.AbsListView
 import android.widget.LinearLayout
 import android.widget.ListView
+import dev.appwall.R
 import dev.appwall.core.screens.ScreenFit
 import dev.appwall.core.screens.screenFit
 

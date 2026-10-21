@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.home
 
 import android.content.Context
 import android.view.LayoutInflater
@@ -9,6 +9,8 @@ import android.widget.Button
 import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.TextView
+import dev.appwall.R
+import dev.appwall.apps.AppIcons
 import dev.appwall.core.apps.AppEntry
 import dev.appwall.core.screens.HomeItem
 import dev.appwall.core.screens.HomeSection

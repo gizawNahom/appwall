@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.storage
 
 import java.sql.Connection
 import java.sql.DriverManager

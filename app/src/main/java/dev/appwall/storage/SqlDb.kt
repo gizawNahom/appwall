@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.storage
 
 /**
  * Just enough of a SQL database for the block log: run statements and read rows. On the phone

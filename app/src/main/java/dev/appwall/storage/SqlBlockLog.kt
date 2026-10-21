@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.storage
 
 import dev.appwall.core.health.ProbeResult
 import dev.appwall.core.health.Probed

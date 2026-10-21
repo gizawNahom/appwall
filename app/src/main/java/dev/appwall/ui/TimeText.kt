@@ -1,7 +1,8 @@
-package dev.appwall
+package dev.appwall.ui
 
 import android.content.Context
 import android.text.format.DateFormat
+import dev.appwall.R
 import java.util.Date
 
 /** Short time phrases used across the home screen. */

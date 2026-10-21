@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.firewall
 
 import android.Manifest
 import android.app.Notification
@@ -9,8 +9,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import dev.appwall.R
+import dev.appwall.appWall
 import dev.appwall.core.firewall.NewAppDecision
 import dev.appwall.core.firewall.newAppDecision
+import dev.appwall.home.HomeActivity
 
 /**
  * Handles freshly installed apps according to [NewAppMode]: asks "Block it? [Block] [Allow]",
@@ -49,16 +52,16 @@ object NewAppNotifier {
                 context, packageName,
                 title = context.getString(R.string.new_app_blocked_title, label),
                 text = context.getString(R.string.new_app_blocked_text),
-                openIntent = Intent(context, MainActivity::class.java),
+                openIntent = Intent(context, HomeActivity::class.java),
                 actions = listOf(action(context, packageName, FirewallVpnService.ACTION_ALLOW_NEW_APP, R.string.unblock)),
             )
             return
         }
 
         // Tapping the notification itself opens AppWall straight into a Block/Allow dialog for this app.
-        val askInApp = Intent(context, MainActivity::class.java)
+        val askInApp = Intent(context, HomeActivity::class.java)
             .setData(Uri.fromParts("package", packageName, null))
-            .putExtra(MainActivity.EXTRA_NEW_APP, packageName)
+            .putExtra(HomeActivity.EXTRA_NEW_APP, packageName)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
         post(
             context, packageName,

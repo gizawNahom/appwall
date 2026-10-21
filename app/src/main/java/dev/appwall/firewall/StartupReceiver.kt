@@ -1,10 +1,11 @@
-package dev.appwall
+package dev.appwall.firewall
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import android.util.Log
+import dev.appwall.appWall
 
 /**
  * Turns the firewall back on after the phone restarts (if the user wants that) and after

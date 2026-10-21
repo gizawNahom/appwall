@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.ui
 
 import android.app.Activity
 import android.app.Dialog
@@ -12,6 +12,7 @@ import android.view.Window
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import dev.appwall.R
 import dev.appwall.core.screens.GUTTER_DP
 import dev.appwall.core.screens.MAX_CONTENT_DP
 

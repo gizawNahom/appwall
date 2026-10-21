@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.log
 
 import android.app.Activity
 import android.content.Context
@@ -12,6 +12,9 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.ListView
 import android.widget.TextView
+import dev.appwall.R
+import dev.appwall.appWall
+import dev.appwall.apps.AppIcons
 import dev.appwall.core.log.Destination
 import dev.appwall.core.net.PacketParser
 import dev.appwall.core.screens.AppLogState
@@ -20,6 +23,12 @@ import dev.appwall.core.screens.DayLabel
 import dev.appwall.core.screens.TimelineRow
 import dev.appwall.core.screens.appLogState
 import dev.appwall.core.screens.shortCount
+import dev.appwall.logLoader
+import dev.appwall.storage.SqlBlockLog
+import dev.appwall.ui.MinuteTicker
+import dev.appwall.ui.TimeText
+import dev.appwall.ui.fitWidth
+import dev.appwall.ui.scrollWithList
 import java.time.ZoneId
 
 /**

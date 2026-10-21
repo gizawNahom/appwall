@@ -28,7 +28,7 @@
         android:theme="@style/Theme.AppWall">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".home.HomeActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize|stateHidden">
@@ -39,25 +39,25 @@
         </activity>
 
         <activity
-            android:name=".LogActivity"
+            android:name=".log.LogActivity"
             android:exported="false"
             android:label="@string/log_title"
-            android:parentActivityName=".MainActivity" />
+            android:parentActivityName=".home.HomeActivity" />
 
         <activity
-            android:name=".AppLogActivity"
+            android:name=".log.AppLogActivity"
             android:exported="false"
             android:label="@string/log_title"
-            android:parentActivityName=".LogActivity" />
+            android:parentActivityName=".log.LogActivity" />
 
         <activity
-            android:name=".SettingsActivity"
+            android:name=".settings.SettingsActivity"
             android:exported="false"
             android:label="@string/settings_title"
-            android:parentActivityName=".MainActivity" />
+            android:parentActivityName=".home.HomeActivity" />
 
         <receiver
-            android:name=".StartupReceiver"
+            android:name=".firewall.StartupReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -67,7 +67,7 @@
 
         <!-- Only the system holds BIND_VPN_SERVICE, so only it can bind here (needed for Always-on VPN). -->
         <service
-            android:name=".FirewallVpnService"
+            android:name=".firewall.FirewallVpnService"
             android:exported="true"
             android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">

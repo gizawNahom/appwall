@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.log
 
 import android.content.Context
 import android.graphics.Canvas
@@ -12,6 +12,7 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.MetricAffectingSpan
 import android.util.AttributeSet
 import android.view.View
+import dev.appwall.R
 
 /**
  * Small bar chart: one bar per value, oldest first; the newest bar is drawn in the accent color.

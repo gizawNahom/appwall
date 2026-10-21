@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.firewall
 
 import android.content.Context
 import android.net.ConnectivityManager

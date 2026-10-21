@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.apps
 
 import android.Manifest
 import android.content.Context

@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.ui
 
 import android.app.Activity
 import android.app.Dialog

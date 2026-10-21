@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.home
 
 import android.Manifest
 import android.app.Activity
@@ -19,6 +19,9 @@ import android.widget.ImageView
 import android.widget.ListView
 import android.widget.Switch
 import android.widget.TextView
+import dev.appwall.R
+import dev.appwall.appWall
+import dev.appwall.apps.AppIcons
 import dev.appwall.core.apps.AppEntry
 import dev.appwall.core.screens.CardLine
 import dev.appwall.core.screens.HomeItem
@@ -28,8 +31,21 @@ import dev.appwall.core.screens.SystemAppWarning
 import dev.appwall.core.screens.systemAppWarning
 import dev.appwall.core.screens.homeState
 import dev.appwall.core.state.Subscription
+import dev.appwall.firewall.FirewallVpnService
+import dev.appwall.firewall.NewAppNotifier
+import dev.appwall.log.AppLogActivity
+import dev.appwall.log.LogActivity
+import dev.appwall.logLoader
+import dev.appwall.settings.SettingsActivity
+import dev.appwall.storage.SqlBlockLog
+import dev.appwall.ui.AppSheet
+import dev.appwall.ui.MinuteTicker
+import dev.appwall.ui.OpenSheet
+import dev.appwall.ui.TimeText
+import dev.appwall.ui.fitWidth
+import dev.appwall.ui.scrollWithList
 
-class MainActivity : Activity() {
+class HomeActivity : Activity() {
 
     private val settings get() = appWall.settings
     private lateinit var adapter: AppListAdapter
@@ -103,7 +119,7 @@ class MainActivity : Activity() {
         adapter = AppListAdapter(this, icons) { app, action -> onRowAction(app, action) }
         findViewById<ListView>(R.id.app_list).apply {
             scrollWithList(this, above = listOf(card))
-            adapter = this@MainActivity.adapter
+            adapter = this@HomeActivity.adapter
             // Positions count the card too when it scrolls with the list: ask the list, not the adapter.
             setOnItemClickListener { parent, _, position, _ ->
                 val row = parent.getItemAtPosition(position) as? HomeItem.Row ?: return@setOnItemClickListener
@@ -482,7 +498,7 @@ class MainActivity : Activity() {
                     when {
                         line.apps == 0 -> getString(R.string.card_none)
                         last == null -> blocked
-                        else -> getString(R.string.card_last_blocked, blocked, TimeText.ago(this@MainActivity, last))
+                        else -> getString(R.string.card_last_blocked, blocked, TimeText.ago(this@HomeActivity, last))
                     }
                 }
                 CardLine.OtherVpn -> getString(R.string.status_other_vpn_short)

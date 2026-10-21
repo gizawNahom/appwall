@@ -1,4 +1,4 @@
-package dev.appwall
+package dev.appwall.storage
 
 import android.content.Context
 import android.database.Cursor
