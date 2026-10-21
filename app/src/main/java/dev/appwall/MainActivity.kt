@@ -45,8 +45,11 @@ class MainActivity : Activity() {
     private var selected: MutableSet<String>? = null
     /** What was last drawn, for taps that act on it (the ticked apps). */
     private var shown: HomeState? = null
-    private var undo: (() -> Unit)? = null
-    private val hideUndo = Runnable { findViewById<View>(R.id.undo_bar).visibility = View.GONE }
+    private var undo: PendingUndo? = null
+    private val hideUndo = Runnable {
+        undo = null
+        findViewById<View>(R.id.undo_bar).visibility = View.GONE
+    }
 
     private val handler = Handler(Looper.getMainLooper())
 
@@ -76,9 +79,9 @@ class MainActivity : Activity() {
             startActivity(Intent(this, LogActivity::class.java))
         }
         findViewById<View>(R.id.undo_button).setOnClickListener {
-            undo?.invoke()
-            undo = null
+            val action = undo?.action
             hideUndo.run()
+            if (action != null) runUndo(action)
         }
 
         firewallSwitch = findViewById(R.id.firewall_switch)
@@ -132,8 +135,33 @@ class MainActivity : Activity() {
         }
         if (settings.policy.enabled) requestNotificationPermission()
 
-        loadApps()
+        // Rotation, split-screen, a font change: Android rebuilds the screen. Carry on where it was.
+        val kept = lastNonConfigurationInstance as? Kept
+        if (kept != null) {
+            apps = kept.apps
+            lastAttempt = kept.lastAttempt
+            packagesSequence = kept.packagesSequence
+            selected = kept.selected
+            kept.undo?.let(::showUndo)
+        } else {
+            selected = savedInstanceState?.getStringArray(STATE_SELECTED)?.toMutableSet()
+        }
+        if (apps == null) loadApps() else revealList(animate = false)
+        render()
         if (savedInstanceState == null) askAboutNewApp(intent)
+    }
+
+    override fun onRetainNonConfigurationInstance(): Any = Kept(apps, packagesSequence, lastAttempt, selected, undo)
+
+    /** Only the selection outlives the process; the app list reloads and an Undo has expired by then. */
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        selected?.let { outState.putStringArray(STATE_SELECTED, it.toTypedArray()) }
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacks(hideUndo)
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -272,7 +300,7 @@ class MainActivity : Activity() {
     private fun stopFirewall() {
         appWall.firewall.turnOff()
         render()
-        showUndo(getString(R.string.undo_wall_off)) { requestStart() }
+        showUndo(getString(R.string.undo_wall_off), UndoAction.TurnOn)
     }
 
     /** A row's button changes its rule (with a few seconds to undo it); a tap on the row opens its log. */
@@ -287,10 +315,7 @@ class MainActivity : Activity() {
         }
         appWall.firewall.allow(listOf(app.packageName))
         render()
-        showUndo(getString(R.string.undo_allowed, app.label)) {
-            appWall.firewall.block(listOf(app.packageName))
-            render()
-        }
+        showUndo(getString(R.string.undo_allowed, app.label), UndoAction.Block(listOf(app.packageName)))
     }
 
     /** Blocks [toBlock], asking first (in a sheet) if any of it is part of Android. */
@@ -311,10 +336,7 @@ class MainActivity : Activity() {
         } else {
             resources.getQuantityString(R.plurals.undo_blocked_n, toBlock.size, toBlock.size)
         }
-        showUndo(message) {
-            appWall.firewall.allow(packages)
-            render()
-        }
+        showUndo(message, UndoAction.Allow(packages))
     }
 
     private fun stopSelecting() {
@@ -330,22 +352,39 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showUndo(message: String, action: () -> Unit) {
-        undo = action
-        findViewById<TextView>(R.id.undo_message).text = message
-        findViewById<View>(R.id.undo_bar).visibility = View.VISIBLE
-        handler.removeCallbacks(hideUndo)
-        handler.postDelayed(hideUndo, UNDO_MS)
+    private fun showUndo(message: String, action: UndoAction) {
+        showUndo(PendingUndo(message, action, SystemClock.elapsedRealtime() + UNDO_MS))
     }
 
-    /** Swaps the loading placeholders for the real list. */
-    private fun revealList() {
-        findViewById<View>(R.id.loading_bar).animate().alpha(0f).withEndAction {
-            findViewById<View>(R.id.loading_bar).visibility = View.GONE
+    /** Shows [pending] until its time is up; a rebuilt screen shows the rest of that time. */
+    private fun showUndo(pending: PendingUndo) {
+        val left = pending.until - SystemClock.elapsedRealtime()
+        if (left <= 0) return
+        undo = pending
+        findViewById<TextView>(R.id.undo_message).text = pending.message
+        findViewById<View>(R.id.undo_bar).visibility = View.VISIBLE
+        handler.removeCallbacks(hideUndo)
+        handler.postDelayed(hideUndo, left)
+    }
+
+    private fun runUndo(action: UndoAction) {
+        when (action) {
+            is UndoAction.Block -> appWall.firewall.block(action.packages)
+            is UndoAction.Allow -> appWall.firewall.allow(action.packages)
+            UndoAction.TurnOn -> requestStart()
         }
-        findViewById<View>(R.id.skeleton).animate().alpha(0f).withEndAction {
-            findViewById<View>(R.id.skeleton).visibility = View.GONE
+        render()
+    }
+
+    /** Swaps the loading placeholders for the real list; at once when the list is already known. */
+    private fun revealList(animate: Boolean = true) {
+        val placeholders = listOf(findViewById<View>(R.id.loading_bar), findViewById(R.id.skeleton))
+        if (!animate) {
+            placeholders.forEach { it.visibility = View.GONE }
+            findViewById<View>(R.id.app_list).alpha = 1f
+            return
         }
+        placeholders.forEach { view -> view.animate().alpha(0f).withEndAction { view.visibility = View.GONE } }
         findViewById<View>(R.id.app_list).animate().alpha(1f)
     }
 
@@ -419,6 +458,25 @@ class MainActivity : Activity() {
         findViewById<View>(R.id.list_empty).visibility = if (state.noMatch) View.VISIBLE else View.GONE
     }
 
+    /** What Undo puts back: the opposite of the change just made. */
+    private sealed interface UndoAction {
+        data class Block(val packages: List<String>) : UndoAction
+        data class Allow(val packages: List<String>) : UndoAction
+        data object TurnOn : UndoAction
+    }
+
+    /** The Undo bar's offer, on screen until [until] (elapsed-realtime clock). */
+    private data class PendingUndo(val message: String, val action: UndoAction, val until: Long)
+
+    /** What Home hands to its rebuilt self across a configuration change. */
+    private class Kept(
+        val apps: List<AppEntry>?,
+        val packagesSequence: Int,
+        val lastAttempt: Long?,
+        val selected: MutableSet<String>?,
+        val undo: PendingUndo?,
+    )
+
     companion object {
         /** Package name of a just-installed app to ask about; set by the "New app" notification. */
         const val EXTRA_NEW_APP = "dev.appwall.NEW_APP"
@@ -426,5 +484,6 @@ class MainActivity : Activity() {
         private const val REQUEST_NOTIFICATIONS = 2
         private const val UNDO_MS = 5000L
         private const val INSTANT_REFUSAL_MS = 700L
+        private const val STATE_SELECTED = "selected"
     }
 }

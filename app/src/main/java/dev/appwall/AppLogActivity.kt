@@ -35,6 +35,8 @@ class AppLogActivity : Activity() {
     private var showTimeline = false
     private val destinations = DestinationsAdapter()
     private val timeline = TimelineAdapter()
+    /** What's on screen, handed to the rebuilt screen on rotation so it doesn't start empty. */
+    private var shown: AppLogState? = null
 
     /** Rebuilds the page's [AppLogState] whenever the log or the block rules change, while visible. */
     private val loader by lazy {
@@ -74,7 +76,10 @@ class AppLogActivity : Activity() {
             if (pkg != null) appWall.firewall.setBlocked(listOf(pkg), !settings.policy.isBlocked(pkg))
         }
         selectTab(showTimeline)
+        (lastNonConfigurationInstance as? AppLogState)?.takeIf { it.showTimeline == showTimeline }?.let(::render)
     }
+
+    override fun onRetainNonConfigurationInstance(): Any? = shown
 
     override fun onStart() {
         super.onStart()
@@ -101,6 +106,7 @@ class AppLogActivity : Activity() {
     }
 
     private fun render(state: AppLogState) {
+        shown = state
         // The "● BLOCKED" / "ALLOWED" tag and the button that flips it.
         findViewById<TextView>(R.id.app_log_state).apply {
             setText(if (state.blocked) R.string.state_blocked else R.string.state_allowed)

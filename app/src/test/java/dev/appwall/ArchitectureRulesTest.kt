@@ -50,7 +50,7 @@ class ArchitectureRulesTest {
         val delayers = sources.filter { it.readText().contains("postDelayed(") }
         assertEquals(listOf("AppWallApplication.kt", "MainActivity.kt"), delayers.map { it.name }.sorted())
         val mainDelays = File("src/main/java/dev/appwall/MainActivity.kt").readLines().filter { "postDelayed(" in it }
-        assertEquals(listOf("handler.postDelayed(hideUndo, UNDO_MS)"), mainDelays.map { it.trim() })
+        assertEquals(listOf("handler.postDelayed(hideUndo, left)"), mainDelays.map { it.trim() })
     }
 
     @Test

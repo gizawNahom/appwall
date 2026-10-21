@@ -27,6 +27,8 @@ class LogActivity : Activity() {
     private val settings get() = appWall.settings
     private lateinit var icons: AppIcons
     private val adapter = AppsAdapter()
+    /** What's on screen, handed to the rebuilt screen on rotation so it doesn't start empty. */
+    private var shown: LogState? = null
 
     /** Reloads whenever the log changes, while the screen is visible. */
     private val loader by lazy {
@@ -59,7 +61,10 @@ class LogActivity : Activity() {
                 startActivity(AppLogActivity.intent(this@LogActivity, this@LogActivity.adapter.getItem(position).packageName))
             }
         }
+        (lastNonConfigurationInstance as? LogState)?.let(::render)
     }
+
+    override fun onRetainNonConfigurationInstance(): Any? = shown
 
     override fun onStart() {
         super.onStart()
@@ -84,6 +89,7 @@ class LogActivity : Activity() {
     }
 
     private fun render(state: LogState) {
+        shown = state
         val days = state.retentionDays
         adapter.apps = state.apps
         adapter.notifyDataSetChanged()
