@@ -66,7 +66,8 @@ tasks.register<JavaExec>("pitest") {
     mainClass = "org.pitest.mutationtest.commandline.MutationCoverageReport"
     argumentProviders.add(CommandLineArgumentProvider {
         listOf(
-            "--targetClasses", "dev.appwall.core.*",
+            // -PpitTargets=dev.appwall.core.log.* mutates one package only, for a quick run.
+            "--targetClasses", providers.gradleProperty("pitTargets").getOrElse("dev.appwall.core.*"),
             "--targetTests", "dev.appwall.core.*",
             // Tests share the code's packages; mutate only the code.
             "--excludedClasses", "*Test,*Test\$*,dev.appwall.core.state.FakeScheduler*",
