@@ -31,9 +31,17 @@ android {
         }
     }
     buildTypes {
+        getByName("debug") {
+            // JaCoCo for the JVM unit tests: createDebugUnitTestCoverageReport. See CLAUDE.md.
+            enableUnitTestCoverage = true
+        }
         getByName("release") {
             signingConfig = signingConfigs.findByName("release")
         }
+    }
+
+    testCoverage {
+        jacocoVersion = "0.8.12"
     }
 
     compileOptions {

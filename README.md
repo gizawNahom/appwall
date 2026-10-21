@@ -1,5 +1,9 @@
 # AppWall
 
+[![CI](https://github.com/gizawNahom/appwall/actions/workflows/ci.yml/badge.svg)](https://github.com/gizawNahom/appwall/actions/workflows/ci.yml)
+![Core coverage](https://raw.githubusercontent.com/gizawNahom/appwall/badges/core-coverage.svg)
+![Core mutation score](https://raw.githubusercontent.com/gizawNahom/appwall/badges/core-mutation.svg)
+
 A simple, open-source firewall for Android that cuts off internet access for the apps you choose. No root needed, no server, no tracking.
 
 <p>
@@ -68,7 +72,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 AppWall is written in Kotlin and split into two modules:
 
 - **`:core`**: the decisions and calculations, as pure functions over immutable data, with no Android code. This is where the logic lives and where it's tested.
-- **`:app`**: a thin Android shell that runs the VPN service, screens, storage and notifications, and passes what it sees to `:core`.
+- **`:app`**: a thin Android shell that runs the VPN service, screens, storage and notifications, and passes what it sees to `:core`. Its packages are grouped by role (`firewall`, `storage`, `apps`) and by screen (`home`, `log`, `settings`), with shared view pieces in `ui`.
 
 Run the tests with:
 
@@ -76,10 +80,15 @@ Run the tests with:
 ./gradlew test
 ```
 
+CI also checks how good the tests are, and fails if either number drops:
+
+- **Coverage** with JaCoCo: `./gradlew :core:jacocoTestReport` (the core must keep 95% of its lines covered). The `:app` shell is mostly Android glue that only runs on a phone, so its JVM coverage is low ([![App coverage](https://raw.githubusercontent.com/gizawNahom/appwall/badges/app-coverage.svg)](https://github.com/gizawNahom/appwall/actions/workflows/ci.yml)); the logic is in `:core`.
+- **Mutation testing** of `:core` with PIT: `./gradlew :core:pitest` makes small changes to the code and checks that the tests catch them. Report in `core/build/reports/pitest/`.
+
 Ground rules for changes:
 
 - **A blocked app never gets network.** This comes before every other concern.
-- **No dependencies.** Plain Android framework only. JUnit 4 and sqlite-jdbc are allowed in tests.
+- **No dependencies.** Plain Android framework only. Tests may use JUnit 4 and sqlite-jdbc, and JaCoCo and PIT measure them; none of these ship in the app.
 - **SQL must run on SQLite 3.18**, the version on Android 8.
 
 ## License
