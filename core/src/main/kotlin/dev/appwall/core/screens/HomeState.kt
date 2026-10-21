@@ -36,8 +36,12 @@ enum class HomeSection { BLOCKED, ALLOWED }
 /** One line of Home's list: a section heading, or an app with the one action that fits it. */
 sealed interface HomeItem {
     data class Heading(val section: HomeSection, val count: Int) : HomeItem
-    /** [blocked] decides the button: Unblock for a blocked app, Block for an allowed one. */
-    data class Row(val app: AppEntry, val blocked: Boolean) : HomeItem
+    /**
+     * [blocked] decides the button: Unblock for a blocked app, Block for an allowed one. While
+     * choosing several apps to block, [selected] says whether this one is ticked; it is null for
+     * rows that can't be chosen (blocked ones) and whenever nothing is being chosen.
+     */
+    data class Row(val app: AppEntry, val blocked: Boolean, val selected: Boolean? = null) : HomeItem
 }
 
 data class HomeState(
@@ -51,13 +55,18 @@ data class HomeState(
     /** A search that matches nothing. */
     val noMatch: Boolean,
     val notices: List<HomeNotice> = emptyList(),
+    /** Choosing several apps to block: rows show ticks instead of buttons. */
+    val selecting: Boolean = false,
+    /** The ticked apps, in list order, ready to block (or warn about). */
+    val selectedApps: List<AppEntry> = emptyList(),
 )
 
 /**
  * The home screen: one list with blocked apps first, then allowed ones, each A–Z, and a calm card
  * with no counts or charts. A search narrows both sections by name or package. Background system
  * services are left out of the allowed section unless [showSystem], or a search finds them; a
- * blocked app always shows. [apps] is null while loading.
+ * blocked app always shows. [apps] is null while loading. [selected] is the set of ticked
+ * packages while choosing several apps to block (long-press), or null when not choosing.
  */
 fun homeState(
     apps: List<AppEntry>?,
@@ -67,6 +76,7 @@ fun homeState(
     anotherVpnActive: Boolean,
     lastAttempt: Long?,
     query: String,
+    selected: Set<String>? = null,
 ): HomeState {
     val search = query.trim()
     fun matches(app: AppEntry) =
@@ -85,7 +95,7 @@ fun homeState(
         }
         if (allowed.isNotEmpty()) {
             add(HomeItem.Heading(HomeSection.ALLOWED, allowed.size))
-            allowed.forEach { add(HomeItem.Row(it, blocked = false)) }
+            allowed.forEach { add(HomeItem.Row(it, blocked = false, selected = selected?.contains(it.packageName))) }
         }
     }
 
@@ -113,5 +123,10 @@ fun homeState(
             HomeNotice.DroppedTries(status.droppedTries).takeIf { status.droppedTries > 0 },
             HomeNotice.LimitedAttribution.takeIf { running && status.attribution == Attribution.LIMITED },
         ),
+        selecting = selected != null,
+        // Every ticked app still installed and allowed, whether or not the search shows it now.
+        selectedApps = if (selected == null) emptyList() else apps.orEmpty()
+            .filter { it.packageName in selected && !policy.isBlocked(it.packageName) }
+            .sortedWith(byName),
     )
 }

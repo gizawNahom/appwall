@@ -48,7 +48,6 @@
     <string name="tab_allowed">Allowed</string>
     <string name="column_app">APP</string>
     <string name="column_today">TODAY</string>
-    <string name="block_an_app">Block an app</string>
     <string name="undo">Undo</string>
 
     <!-- Expanded row -->
@@ -70,22 +69,37 @@
         <item quantity="other">%d apps can’t use the internet</item>
     </plurals>
 
-    <!-- Block-an-app picker -->
-    <string name="close">Close</string>
-    <string name="picker_search_hint">Search by name or package</string>
-    <string name="picker_allowed_total">%d allowed</string>
-    <string name="filter_apps">Apps</string>
-    <string name="filter_system">System</string>
-    <string name="filter_recent">Recent</string>
-    <string name="picker_select">Select apps to block</string>
-    <plurals name="picker_block_n">
+    <!-- Choosing several apps to block (long-press a row) -->
+    <string name="select_none">Select apps to block</string>
+    <plurals name="select_count">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
+    <string name="select_block">Block</string>
+    <plurals name="select_block_n">
         <item quantity="one">Block %d app</item>
         <item quantity="other">Block %d apps</item>
     </plurals>
-    <string name="picker_row">%1$s. Tap to select.</string>
-    <string name="picker_row_selected">%1$s, selected. Tap to unselect.</string>
-    <string name="picker_empty">No allowed apps here.</string>
-    <string name="picker_empty_recent">You haven\'t installed any apps in the last 7 days.</string>
+    <string name="select_cancel">Stop selecting</string>
+    <string name="row_selected">%1$s, selected. Double-tap to unselect.</string>
+    <string name="row_unselected">%1$s. Double-tap to select.</string>
+
+    <!-- Before blocking something that is part of Android -->
+    <string name="warn_title_one">Block %1$s?</string>
+    <string name="warn_title_many">Block %1$d apps?</string>
+    <string name="warn_one">%1$s is part of your phone. Blocking it can quietly break other apps or phone features, and it may not be obvious why. You can unblock it again at any time.</string>
+    <string name="warn_inline_one">%1$s is part of Android. Blocking it can quietly break other apps or phone features.</string>
+    <string name="warn_inline_many">%1$s are part of Android. Blocking them can quietly break other apps or phone features.</string>
+    <string name="warn_counted">%1$d of these are part of Android. Blocking them can quietly break other apps or phone features:</string>
+    <string name="warn_and">and</string>
+    <string name="warn_keep">Keep allowed</string>
+    <string name="warn_block_anyway">Block anyway</string>
+    <plurals name="warn_block_others">
+        <item quantity="one">Block the other app</item>
+        <item quantity="other">Block the other %d</item>
+    </plurals>
+    <string name="warn_block_all">Block all %1$d anyway</string>
+    <string name="warn_back">Back</string>
     <string name="undo_blocked">%1$s can’t use the internet</string>
     <string name="undo_allowed">%1$s can use the internet</string>
     <string name="block_app_named">Block %1$s</string>

@@ -14,6 +14,7 @@ import android.os.SystemClock
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
+import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.ListView
@@ -23,6 +24,10 @@ import dev.appwall.core.apps.AppEntry
 import dev.appwall.core.screens.CardLine
 import dev.appwall.core.screens.HomeItem
 import dev.appwall.core.screens.HomeNotice
+import dev.appwall.core.screens.HomeState
+import dev.appwall.core.screens.SystemAppWarning
+import dev.appwall.core.screens.joinNames
+import dev.appwall.core.screens.systemAppWarning
 import dev.appwall.core.screens.homeState
 import dev.appwall.core.state.Subscription
 
@@ -39,6 +44,10 @@ class MainActivity : Activity() {
     /** When a blocked app last tried to connect, for the card's one calm line. */
     private var lastAttempt: Long? = null
     private var query = ""
+    /** The ticked packages while choosing several apps to block (long-press a row); null otherwise. */
+    private var selected: MutableSet<String>? = null
+    /** What was last drawn, for taps that act on it (the ticked apps). */
+    private var shown: HomeState? = null
     private var undo: (() -> Unit)? = null
     private val hideUndo = Runnable { findViewById<View>(R.id.undo_bar).visibility = View.GONE }
 
@@ -85,15 +94,28 @@ class MainActivity : Activity() {
         findViewById<ListView>(R.id.app_list).apply {
             adapter = this@MainActivity.adapter
             setOnItemClickListener { _, _, position, _ ->
-                (this@MainActivity.adapter.getItem(position) as? HomeItem.Row)?.let {
-                    onRowAction(it.app, AppListAdapter.Action.OPEN)
+                val row = this@MainActivity.adapter.getItem(position) as? HomeItem.Row ?: return@setOnItemClickListener
+                val ticked = selected
+                when {
+                    ticked == null -> onRowAction(row.app, AppListAdapter.Action.OPEN)
+                    row.selected != null -> {
+                        if (!ticked.remove(row.app.packageName)) ticked += row.app.packageName
+                        render()
+                    }
                 }
             }
+            // Long-press an allowed app to choose several to block at once.
+            setOnItemLongClickListener { _, _, position, _ ->
+                val row = this@MainActivity.adapter.getItem(position) as? HomeItem.Row
+                if (row == null || row.blocked || selected != null) return@setOnItemLongClickListener false
+                selected = mutableSetOf(row.app.packageName)
+                hideUndo.run()
+                render()
+                true
+            }
         }
-        findViewById<View>(R.id.block_app).setOnClickListener {
-            @Suppress("DEPRECATION")
-            startActivityForResult(Intent(this, PickerActivity::class.java), REQUEST_PICK)
-        }
+        findViewById<View>(R.id.select_cancel).setOnClickListener { stopSelecting() }
+        findViewById<View>(R.id.select_block).setOnClickListener { block(shown?.selectedApps.orEmpty()) }
 
         search = findViewById(R.id.search)
         findViewById<View>(R.id.search_clear).setOnClickListener { search.setText("") }
@@ -198,10 +220,6 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_PICK) {
-            if (resultCode == RESULT_OK) blockPicked(data?.getStringArrayExtra(PickerActivity.EXTRA_PACKAGES)?.toList().orEmpty())
-            return
-        }
         if (requestCode != REQUEST_VPN) return
         if (resultCode == RESULT_OK) {
             startFirewall()
@@ -259,29 +277,87 @@ class MainActivity : Activity() {
             startActivity(AppLogActivity.intent(this, app.packageName))
             return
         }
-        val block = action == AppListAdapter.Action.BLOCK
-        appWall.firewall.setBlocked(listOf(app.packageName), block)
+        if (action == AppListAdapter.Action.BLOCK) {
+            block(listOf(app))
+            return
+        }
+        appWall.firewall.allow(listOf(app.packageName))
         render()
-        showUndo(getString(if (block) R.string.undo_blocked else R.string.undo_allowed, app.label)) {
-            appWall.firewall.setBlocked(listOf(app.packageName), !block)
+        showUndo(getString(R.string.undo_allowed, app.label)) {
+            appWall.firewall.block(listOf(app.packageName))
             render()
         }
     }
 
-    /** Apps chosen in the picker: block them all, with one Undo for the lot. */
-    private fun blockPicked(packages: List<String>) {
-        if (packages.isEmpty()) return
+    /** Blocks [toBlock], asking first if any of it is part of Android. */
+    private fun block(toBlock: List<AppEntry>) {
+        if (toBlock.isEmpty()) return
+        val warning = systemAppWarning(toBlock)
+        if (warning == null) blockNow(toBlock) else warn(warning)
+    }
+
+    /** Blocks them all with one Undo for the lot, and ends choosing several. */
+    private fun blockNow(toBlock: List<AppEntry>) {
+        val packages = toBlock.map { it.packageName }
         appWall.firewall.block(packages)
+        selected = null
         render()
-        val message = if (packages.size == 1) {
-            val label = apps?.firstOrNull { it.packageName == packages[0] }?.label ?: packages[0]
-            getString(R.string.undo_blocked, label)
+        val message = if (toBlock.size == 1) {
+            getString(R.string.undo_blocked, toBlock[0].label)
         } else {
-            resources.getQuantityString(R.plurals.undo_blocked_n, packages.size, packages.size)
+            resources.getQuantityString(R.plurals.undo_blocked_n, toBlock.size, toBlock.size)
         }
         showUndo(message) {
             appWall.firewall.allow(packages)
             render()
+        }
+    }
+
+    /**
+     * Blocking part of Android can quietly break other things, so say so first. One app on its
+     * own: block it anyway, or keep it allowed. Several: block only the others (the safe choice,
+     * when there are others), block all of them anyway, or go back.
+     */
+    private fun warn(warning: SystemAppWarning) {
+        val all = warning.system + warning.others
+        val names = warning.system.map { it.label }
+        val dialog = AlertDialog.Builder(this)
+        if (all.size == 1) {
+            dialog.setTitle(getString(R.string.warn_title_one, names[0]))
+                .setMessage(getString(R.string.warn_one, names[0]))
+                .setPositiveButton(R.string.warn_block_anyway) { _, _ -> blockNow(all) }
+                .setNegativeButton(R.string.warn_keep, null)
+        } else {
+            val message = when {
+                !warning.namesInline -> getString(R.string.warn_counted, names.size) + "\n\n" + names.joinToString("\n")
+                names.size == 1 -> getString(R.string.warn_inline_one, names[0])
+                else -> getString(R.string.warn_inline_many, joinNames(names, getString(R.string.warn_and)))
+            }
+            dialog.setTitle(getString(R.string.warn_title_many, all.size))
+                .setMessage(message)
+                .setNeutralButton(getString(R.string.warn_block_all, all.size)) { _, _ -> blockNow(all) }
+                .setNegativeButton(R.string.warn_back, null)
+            if (warning.canBlockOthers) {
+                val others = warning.others.size
+                dialog.setPositiveButton(resources.getQuantityString(R.plurals.warn_block_others, others, others)) { _, _ -> blockNow(warning.others) }
+            }
+        }
+        val shown = dialog.show()
+        // Blocking part of Android anyway is the risky choice: coral, like other risky actions.
+        val risky = if (all.size == 1) AlertDialog.BUTTON_POSITIVE else AlertDialog.BUTTON_NEUTRAL
+        shown.getButton(risky)?.setTextColor(getColor(R.color.blocked))
+    }
+
+    private fun stopSelecting() {
+        selected = null
+        render()
+    }
+
+    @Deprecated("Platform back handling; still delivered when no back callback is registered")
+    override fun onBackPressed() {
+        if (selected != null) stopSelecting() else {
+            @Suppress("DEPRECATION")
+            super.onBackPressed()
         }
     }
 
@@ -312,9 +388,22 @@ class MainActivity : Activity() {
     private fun render() {
         val status = appWall.firewallStatus.status
         val state = homeState(
-            apps, settings.policy, settings.screenPrefs.showSystemApps, status, appWall.anotherVpnActive(), lastAttempt, query,
+            apps, settings.policy, settings.screenPrefs.showSystemApps, status, appWall.anotherVpnActive(), lastAttempt, query, selected,
         )
+        shown = state
         adapter.show(state)
+
+        findViewById<View>(R.id.select_bar).visibility = if (state.selecting) View.VISIBLE else View.GONE
+        if (state.selecting) {
+            val count = state.selectedApps.size
+            findViewById<TextView>(R.id.select_count).text =
+                if (count == 0) getString(R.string.select_none) else resources.getQuantityString(R.plurals.select_count, count, count)
+            findViewById<Button>(R.id.select_block).apply {
+                isEnabled = count > 0
+                text = if (count <= 1) getString(R.string.select_block) else resources.getQuantityString(R.plurals.select_block_n, count, count)
+                setTextColor(getColor(if (count > 0) R.color.ground else R.color.text_secondary))
+            }
+        }
 
         updatingSwitch = true
         firewallSwitch.isChecked = state.switchOn
@@ -366,7 +455,6 @@ class MainActivity : Activity() {
         const val EXTRA_NEW_APP = "dev.appwall.NEW_APP"
         private const val REQUEST_VPN = 1
         private const val REQUEST_NOTIFICATIONS = 2
-        private const val REQUEST_PICK = 3
         private const val UNDO_MS = 5000L
         private const val INSTANT_REFUSAL_MS = 700L
     }

@@ -32,7 +32,8 @@ class HomeStateTest {
         otherVpn: Boolean = false,
         lastAttempt: Long? = 42L,
         apps: List<AppEntry>? = this.apps,
-    ) = homeState(apps, FirewallPolicy(enabled = true, blocked = blocked), showSystem, status, otherVpn, lastAttempt, query)
+        selected: Set<String>? = null,
+    ) = homeState(apps, FirewallPolicy(enabled = true, blocked = blocked), showSystem, status, otherVpn, lastAttempt, query, selected)
 
     @Test
     fun oneListBlockedFirstThenAllowedEachByName() {
@@ -91,6 +92,25 @@ class HomeStateTest {
         }
         assertEquals(CardLine.Blocking(0, null), state(blocked = emptySet(), lastAttempt = null).cardLine)
         assertEquals(CardLine.Blocking(1, 42L), state(blocked = setOf("com.game", "com.uninstalled")).cardLine) // installed apps only
+    }
+
+    @Test
+    fun choosingSeveralTicksAllowedRowsOnly() {
+        val s = state(selected = setOf("com.maps", "com.bank"))
+        assertEquals(true, s.selecting)
+        assertEquals(listOf(Row(chrome, true), Row(game, true), Row(bank, false, true), Row(maps, false, true)), s.items.filterIsInstance<Row>())
+        assertEquals(listOf(bank, maps), s.selectedApps)
+        val none = state(selected = emptySet())
+        assertEquals(true, none.selecting) // started, nothing ticked yet
+        assertEquals(listOf(false, false), none.items.filterIsInstance<Row>().filter { !it.blocked }.map { it.selected })
+        assertEquals(false, state().selecting)
+        assertEquals(null, state().items.filterIsInstance<Row>().last().selected)
+    }
+
+    @Test
+    fun aTickedAppStaysChosenWhenSearchHidesItButNotOnceBlocked() {
+        assertEquals(listOf(bank, maps), state(selected = setOf("com.maps", "com.bank"), query = "maps").selectedApps)
+        assertEquals(listOf(maps), state(selected = setOf("com.maps", "com.game")).selectedApps) // com.game is already blocked
     }
 
     @Test

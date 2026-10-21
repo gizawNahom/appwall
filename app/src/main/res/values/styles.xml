@@ -93,17 +93,4 @@
         <item name="android:gravity">center</item>
         <item name="android:textAppearance">@style/TextAppearance.AppWall.Body2</item>
     </style>
-
-    <!-- Picker filter chip. -->
-    <style name="FilterChip">
-        <item name="android:layout_width">wrap_content</item>
-        <item name="android:layout_height">36dp</item>
-        <item name="android:layout_marginEnd">6dp</item>
-        <item name="android:background">@drawable/bg_chip</item>
-        <item name="android:gravity">center</item>
-        <item name="android:paddingHorizontal">12dp</item>
-        <item name="android:textAppearance">@style/TextAppearance.AppWall.Body2</item>
-        <item name="android:textSize">13sp</item>
-        <item name="android:textColor">@color/chip_text</item>
-    </style>
 </resources>

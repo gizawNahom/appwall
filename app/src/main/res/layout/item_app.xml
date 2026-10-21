@@ -2,6 +2,7 @@
 <!--
     One app row: icon, name, a short status line ("No internet" for a blocked app, the package
     otherwise) and the one action that fits: Unblock or Block. Tapping the row opens the app's log.
+    While choosing several apps to block, a tick replaces the button.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -11,6 +12,19 @@
     android:minHeight="68dp"
     android:orientation="horizontal"
     android:paddingHorizontal="4dp">
+
+    <!-- Shown only while choosing several apps; the row itself takes the tap. -->
+    <CheckBox
+        android:id="@+id/app_check"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="12dp"
+        android:background="@null"
+        android:button="@drawable/check_square"
+        android:clickable="false"
+        android:focusable="false"
+        android:importantForAccessibility="no"
+        android:visibility="gone" />
 
     <ImageView
         android:id="@+id/app_icon"

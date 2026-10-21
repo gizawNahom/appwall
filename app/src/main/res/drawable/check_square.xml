@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Picker checkbox: an outlined square, filled with the accent and a check mark when chosen. -->
+<!-- Home's tick while choosing several apps: an outlined square, filled with the accent and a check mark when chosen. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_checked="true">
         <layer-list>

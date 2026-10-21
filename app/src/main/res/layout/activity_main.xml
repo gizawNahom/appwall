@@ -224,26 +224,48 @@
                 android:text="@string/undo"
                 android:textColor="@color/accent" />
         </LinearLayout>
-    </FrameLayout>
 
-    <FrameLayout
-        android:id="@+id/block_app"
-        android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:layout_marginTop="12dp"
-        android:background="@drawable/bg_dashed"
-        android:clickable="true"
-        android:focusable="true"
-        android:foreground="?android:attr/selectableItemBackground">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:drawableStart="@drawable/ic_add"
-            android:drawablePadding="8dp"
+        <!-- While choosing several apps (long-press a row): how many, and Block -->
+        <LinearLayout
+            android:id="@+id/select_bar"
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:layout_gravity="bottom"
+            android:layout_marginBottom="4dp"
+            android:background="@drawable/bg_undo"
+            android:elevation="4dp"
             android:gravity="center_vertical"
-            android:text="@string/block_an_app"
-            android:textAppearance="@style/TextAppearance.AppWall.Body2" />
+            android:orientation="horizontal"
+            android:paddingStart="4dp"
+            android:paddingEnd="8dp"
+            android:visibility="gone">
+
+            <ImageButton
+                android:id="@+id/select_cancel"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/select_cancel"
+                android:src="@drawable/ic_close" />
+
+            <TextView
+                android:id="@+id/select_count"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:accessibilityLiveRegion="polite"
+                android:textAppearance="@style/TextAppearance.AppWall.Body1" />
+
+            <Button
+                android:id="@+id/select_block"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:background="@drawable/bg_primary"
+                android:paddingHorizontal="16dp"
+                android:stateListAnimator="@null"
+                android:textAppearance="@style/TextAppearance.AppWall.Button"
+                android:textColor="@color/ground" />
+        </LinearLayout>
     </FrameLayout>
 </LinearLayout>

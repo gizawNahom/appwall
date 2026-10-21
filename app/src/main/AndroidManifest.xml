@@ -51,13 +51,6 @@
             android:parentActivityName=".LogActivity" />
 
         <activity
-            android:name=".PickerActivity"
-            android:exported="false"
-            android:label="@string/block_an_app"
-            android:parentActivityName=".MainActivity"
-            android:windowSoftInputMode="adjustResize|stateHidden" />
-
-        <activity
             android:name=".SettingsActivity"
             android:exported="false"
             android:label="@string/settings_title"

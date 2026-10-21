@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.BaseAdapter
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.TextView
 import dev.appwall.core.apps.AppEntry
@@ -15,7 +16,8 @@ import dev.appwall.core.screens.HomeState
 
 /**
  * Home's one list. Draws what [HomeState] decided, nothing more: section headings, then each app
- * with the one action that fits it. Taps go back to the screen through [onAction].
+ * with the one action that fits it, or, while choosing several apps to block, a tick. Taps go back
+ * to the screen through [onAction].
  */
 class AppListAdapter(
     private val context: Context,
@@ -27,9 +29,11 @@ class AppListAdapter(
     enum class Action { BLOCK, UNBLOCK, OPEN }
 
     private var items: List<HomeItem> = emptyList()
+    private var selecting = false
 
     fun show(state: HomeState) {
         items = state.items
+        selecting = state.selecting
         notifyDataSetChanged()
     }
 
@@ -69,15 +73,24 @@ class AppListAdapter(
                 setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0)
             }
         }
+        val selected = item.selected
+        view.findViewById<CheckBox>(R.id.app_check).apply {
+            visibility = if (selected != null) View.VISIBLE else View.GONE
+            isChecked = selected == true
+        }
+        // While choosing, a blocked app can't be chosen: it steps back.
+        view.alpha = if (selecting && selected == null) 0.4f else 1f
         view.findViewById<Button>(R.id.app_action).apply {
+            visibility = if (selecting) View.GONE else View.VISIBLE
             setText(if (item.blocked) R.string.unblock else R.string.block)
             setTextColor(context.getColor(if (item.blocked) R.color.accent else R.color.text))
             contentDescription = context.getString(if (item.blocked) R.string.unblock_app else R.string.block_app_named, app.label)
             setOnClickListener { onAction(app, if (item.blocked) Action.UNBLOCK else Action.BLOCK) }
         }
-        view.contentDescription = context.getString(
-            if (item.blocked) R.string.row_blocked_description else R.string.row_allowed_description, app.label,
-        )
+        view.contentDescription = when (selected) {
+            null -> context.getString(if (item.blocked) R.string.row_blocked_description else R.string.row_allowed_description, app.label)
+            else -> context.getString(if (selected) R.string.row_selected else R.string.row_unselected, app.label)
+        }
         return view
     }
 }
