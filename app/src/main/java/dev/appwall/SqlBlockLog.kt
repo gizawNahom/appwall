@@ -27,6 +27,8 @@ class SqlBlockLog(
     private val clock: () -> Long = System::currentTimeMillis,
     private val onDbThread: () -> Boolean,
     private val changed: () -> Unit = {},
+    /** The most entries kept, newest first: a blocked app looking up endless new names can't fill the disk. */
+    private val maxRows: Int = MAX_ROWS,
 ) : Probed {
     private val merger = LogMerger()
     private var insertsSincePrune = 0
@@ -59,6 +61,7 @@ class SqlBlockLog(
                 if (++insertsSincePrune >= 100) {
                     insertsSincePrune = 0
                     db.execute("DELETE FROM log WHERE time < ?", listOf(now - retentionMs()))
+                    db.execute(KEEP_NEWEST, listOf(maxRows))
                     merger.forget(now)
                 }
             }
@@ -179,6 +182,9 @@ class SqlBlockLog(
         /** 2: adds the (package, time) index for the per-app queries. */
         const val VERSION = 2
         private const val PROBE_PACKAGE = "dev.appwall.probe"
+        const val MAX_ROWS = 50_000
+        /** Deletes all but the newest ? entries (ids only grow, so newest = highest). */
+        private const val KEEP_NEWEST = "DELETE FROM log WHERE _id <= (SELECT _id FROM log ORDER BY _id DESC LIMIT 1 OFFSET ?)"
 
         // Queries with an unattributed variant: `package = ?` can't match the null ones. Chosen
         // whole, so no SQL text is ever assembled at run time.

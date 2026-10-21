@@ -207,6 +207,17 @@ class SqlBlockLogTest {
     }
 
     @Test
+    fun aFloodOfNewNamesIsCappedToTheNewestEntries() {
+        val capped = SqlBlockLog(db, { retentionDays }, { now }, onDbThread = { Thread.currentThread() === testThread }, maxRows = 150)
+        for (i in 1..400) capped.record(listOf(BlockedTry(CHROME, dns("n$i.flood.example"), now)))
+        // Trimmed when pruning runs (every 100 new rows), so at most the cap plus one round.
+        assertEquals(true, rows() in 150..250)
+        val kept = db.query("SELECT host FROM log") { it.string(0) }
+        assertEquals(true, "n400.flood.example" in kept) // the newest stay
+        assertEquals(false, "n1.flood.example" in kept) // the oldest go
+    }
+
+    @Test
     fun pruneUsesTheCurrentRetention() {
         record(CHROME, tcp("1.2.3.4", 443))
         now += 2 * DAY

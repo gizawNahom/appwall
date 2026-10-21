@@ -19,6 +19,9 @@ object PacketParser {
     const val UDP = 17
     const val ICMPV6 = 58
 
+    /** The longest a DNS name can be on the wire, length bytes included (RFC 1035). */
+    private const val MAX_DNS_NAME = 255
+
     /** Parses an IPv4 or IPv6 packet read from the tunnel; null if it's too short or not IP. */
     fun parse(b: ByteArray, length: Int): Packet? {
         if (length < 1) return null
@@ -69,20 +72,40 @@ object PacketParser {
         else -> "IP/$protocol"
     }
 
-    /** Reads the first question's name from a DNS message starting at [start]. */
+    /**
+     * Reads the first question's name from a DNS message starting at [start]. A blocked app chooses
+     * these bytes, so they're shown the way DNS tools show them: printable ASCII as is, anything
+     * else (control characters, high bytes) and a dot or backslash inside a label escaped, as
+     * `\DDD`, `\.` and `\\`. A name longer than DNS allows (255 bytes on the wire) isn't one.
+     */
     private fun dnsQuestion(b: ByteArray, start: Int, length: Int): String? {
         if (length < start + 12 || u16(b, start + 4) == 0) return null // no room, or no questions
         val labels = mutableListOf<String>()
         var i = start + 12
+        var wireLength = 1 // the closing zero byte
         while (true) {
             if (i >= length) return null // truncated before the name's end, so not the real name
             val labelLength = b[i].toInt() and 0xFF
             if (labelLength == 0) break
             if (labelLength and 0xC0 != 0 || i + 1 + labelLength > length) return null // compressed or truncated
-            labels += String(b, i + 1, labelLength, Charsets.US_ASCII)
+            wireLength += 1 + labelLength
+            if (wireLength > MAX_DNS_NAME) return null
+            labels += presentation(b, i + 1, labelLength)
             i += 1 + labelLength
         }
         return labels.joinToString(".").ifEmpty { null }
+    }
+
+    /** One label as DNS tools print it (RFC 1035 section 5.1). */
+    private fun presentation(b: ByteArray, from: Int, count: Int): String = buildString {
+        for (k in from until from + count) {
+            val c = b[k].toInt() and 0xFF
+            when {
+                c == '.'.code || c == '\\'.code -> append('\\').append(c.toChar())
+                c in 0x21..0x7E -> append(c.toChar())
+                else -> append('\\').append(c.toString().padStart(3, '0'))
+            }
+        }
     }
 
     private fun u16(b: ByteArray, offset: Int) = ((b[offset].toInt() and 0xFF) shl 8) or (b[offset + 1].toInt() and 0xFF)

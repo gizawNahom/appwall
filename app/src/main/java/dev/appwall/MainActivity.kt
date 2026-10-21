@@ -147,6 +147,9 @@ class MainActivity : Activity() {
     private fun askAboutNewApp(intent: Intent) {
         val packageName = intent.getStringExtra(EXTRA_NEW_APP) ?: return
         intent.removeExtra(EXTRA_NEW_APP)
+        // Home is the launcher screen, so any app can open it with this extra. Only ask when
+        // AppWall's own notification for that app is showing: then the tap came from it.
+        if (!NewAppNotifier.isShowing(this, packageName)) return
         NewAppNotifier.cancel(this, packageName)
         val info = try {
             packageManager.getApplicationInfo(packageName, 0)

@@ -85,6 +85,39 @@ class PacketParserTest {
     }
 
     @Test
+    fun oddBytesInANameAreShownEscaped() {
+        // A blocked app picks these bytes: a newline, a tab, a high byte, and a dot or backslash
+        // inside a label would all mislead if shown raw.
+        val name = dnsName("a\nb".toByteArray(), byteArrayOf('x'.code.toByte(), 0xE2.toByte(), 9), "do.t\\".toByteArray(), "com".toByteArray())
+        val p = parse(ipv4(PacketParser.UDP, "10.111.0.1", "10.111.0.2", transport(3333, 53) + name))!!
+        assertEquals("a\\010b.x\\226\\009.do\\.t\\\\.com", p.dnsQuery)
+    }
+
+    @Test
+    fun aNameLongerThanDnsAllowsIsNotOne() {
+        fun label(n: Int) = ByteArray(n) { 'a'.code.toByte() }
+        val longest = dnsName(label(63), label(63), label(63), label(61)) // 255 bytes on the wire: 253 characters
+        assertEquals(253, parse(ipv4(PacketParser.UDP, "10.111.0.1", "10.111.0.2", transport(3333, 53) + longest))!!.dnsQuery?.length)
+        val tooLong = dnsName(label(63), label(63), label(63), label(62))
+        assertNull(parse(ipv4(PacketParser.UDP, "10.111.0.1", "10.111.0.2", transport(3333, 53) + tooLong))!!.dnsQuery)
+    }
+
+    @Test
+    fun randomAndMangledPacketsNeverCrashTheParser() {
+        // Whatever arrives in the tunnel, parsing returns a packet or null; it never throws.
+        val random = java.util.Random(20261021)
+        val real = ipv4(PacketParser.UDP, "10.111.0.1", "10.111.0.2", transport(3333, 53) + dns("www.example.com"))
+        repeat(20_000) {
+            val bytes = if (it % 2 == 0) {
+                ByteArray(random.nextInt(120)).also(random::nextBytes)
+            } else {
+                real.copyOf().also { p -> repeat(1 + random.nextInt(6)) { p[random.nextInt(p.size)] = random.nextInt(256).toByte() } }
+            }
+            PacketParser.parse(bytes, random.nextInt(bytes.size + 1))
+        }
+    }
+
+    @Test
     fun onlyTheGivenLengthIsRead() {
         // The tunnel reuses one buffer, so bytes past the length are leftovers from older packets.
         val packet = ipv4(PacketParser.TCP, "10.111.0.1", "1.2.3.4", transport(1234, 80))
@@ -144,6 +177,13 @@ class PacketParserTest {
         byteArrayOf((sourcePort shr 8).toByte(), sourcePort.toByte(), (destinationPort shr 8).toByte(), destinationPort.toByte(), 0, 0, 0, 0)
 
     private fun dnsHeader() = byteArrayOf(0x12, 0x34, 0x01, 0x00, 0, 1, 0, 0, 0, 0, 0, 0)
+
+    /** A DNS query whose name is made of these raw labels, type A, class IN. */
+    private fun dnsName(vararg labels: ByteArray): ByteArray {
+        var question = ByteArray(0)
+        for (label in labels) question += byteArrayOf(label.size.toByte()) + label
+        return dnsHeader() + question + byteArrayOf(0, 0, 1, 0, 1)
+    }
 
     /** A DNS query for [name], type A, class IN. */
     private fun dns(name: String): ByteArray {

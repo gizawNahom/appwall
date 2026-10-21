@@ -91,10 +91,17 @@ object NewAppNotifier {
             .setContentTitle(title)
             .setContentText(text)
             .setContentIntent(openApp)
-            .setAutoCancel(true)
+            // Not auto-cancelled: Home checks it is still showing (proof the tap came from it) and
+            // then cancels it itself; the buttons cancel it in the service.
+            .setAutoCancel(false)
         actions.forEach { builder.addAction(it) }
         manager.notify(packageName, NOTIFICATION_ID, builder.build())
     }
+
+    /** Whether AppWall's own "New app" notification for [packageName] is showing right now. */
+    fun isShowing(context: Context, packageName: String): Boolean =
+        context.getSystemService(NotificationManager::class.java).activeNotifications
+            .any { it.id == NOTIFICATION_ID && it.tag == packageName }
 
     fun cancel(context: Context, packageName: String) {
         context.getSystemService(NotificationManager::class.java).cancel(packageName, NOTIFICATION_ID)
