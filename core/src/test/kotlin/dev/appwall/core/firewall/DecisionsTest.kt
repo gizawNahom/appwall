@@ -28,6 +28,7 @@ class DecisionsTest {
     fun installedBlockedAppsAreRoutedInAStableOrder() {
         val plan = tunnelPlan(setOf("b.app", "gone.app", "a.app")) { it != "gone.app" }
         assertEquals(TunnelPlan.Route(listOf("a.app", "b.app")), plan)
+        assertEquals(listOf("a.app", "b.app"), (plan as TunnelPlan.Route).packages)
     }
 
     // shouldCount
@@ -88,6 +89,7 @@ class DecisionsTest {
             Case(NewAppMode.BLOCK, false, true, true, IGNORE),
         )
         for (c in cases) assertEquals(c.toString(), c.expected, newAppDecision(c.mode, c.self, c.blocked, c.internet))
+        assertEquals(NewAppDecision.entries.toSet(), cases.map { it.expected }.toSet()) // every decision is covered
     }
 
     private fun packet(protocol: Int, destination: String, port: Int) =

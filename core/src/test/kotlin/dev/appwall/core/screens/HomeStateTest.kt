@@ -26,6 +26,7 @@ class HomeStateTest {
 
     private fun state(
         query: String = "",
+        enabled: Boolean = true,
         blocked: Set<String> = setOf("com.game", "com.android.chrome"),
         showSystem: Boolean = false,
         status: FirewallStatus = on,
@@ -33,7 +34,7 @@ class HomeStateTest {
         lastAttempt: Long? = 42L,
         apps: List<AppEntry>? = this.apps,
         selected: Set<String>? = null,
-    ) = homeState(apps, FirewallPolicy(enabled = true, blocked = blocked), showSystem, status, otherVpn, lastAttempt, query, selected)
+    ) = homeState(apps, FirewallPolicy(enabled = enabled, blocked = blocked), showSystem, status, otherVpn, lastAttempt, query, selected)
 
     @Test
     fun oneListBlockedFirstThenAllowedEachByName() {
@@ -41,6 +42,17 @@ class HomeStateTest {
             listOf(Heading(BLOCKED, 2), Row(chrome, true), Row(game, true), Heading(ALLOWED, 2), Row(bank, false), Row(maps, false)),
             state().items,
         )
+        val headings = state().items.filterIsInstance<Heading>()
+        assertEquals(HomeSection.entries, headings.map { it.section }) // each section once, in order
+        assertEquals(listOf(2, 2), headings.map { it.count })
+    }
+
+    @Test
+    fun byNameMeansTheNameWhateverItsCaseThenThePackage() {
+        val notesB = app("Notes", "com.b.notes")
+        val notesA = app("notes", "com.a.notes")
+        val atlas = app("Atlas", "com.z.atlas") // last by package, first by name
+        assertEquals(listOf(atlas, notesA, notesB), allowed(state(apps = listOf(notesB, atlas, notesA), blocked = emptySet())))
     }
 
     @Test
@@ -56,6 +68,7 @@ class HomeStateTest {
         assertEquals(listOf(Heading(ALLOWED, 1), Row(maps, false)), state(query = "com.ma").items)
         assertEquals(true, state(query = "zzz").noMatch)
         assertEquals(false, state().noMatch)
+        assertEquals(false, state(apps = emptyList()).noMatch) // nothing installed is not a search that failed
     }
 
     @Test
@@ -69,6 +82,7 @@ class HomeStateTest {
     fun whileLoading() {
         val loading = state(apps = null)
         assertEquals(true, loading.loading)
+        assertEquals(false, state().loading)
         assertEquals(emptyList<HomeItem>(), loading.items)
         assertEquals(false, loading.noMatch) // not "nothing matches" while still loading
         assertEquals(CardLine.Blocking(2, 42L), loading.cardLine) // the count comes from the policy until the apps are known
@@ -95,6 +109,24 @@ class HomeStateTest {
     }
 
     @Test
+    fun whileBlockingTheCardSaysHowManyAppsAndWhenOneLastTried() {
+        val line = state(blocked = setOf("com.game", "com.bank", "com.uninstalled"), lastAttempt = 1_700L).cardLine as CardLine.Blocking
+        assertEquals(2, line.apps)
+        assertEquals(1_700L, line.lastAttempt)
+        assertEquals(null, (state(lastAttempt = null).cardLine as CardLine.Blocking).lastAttempt) // nothing logged yet
+    }
+
+    @Test
+    fun theSwitchShowsTheChoiceTheCardWhatIsHappening() {
+        val failed = state(enabled = true, status = FirewallStatus(FirewallState.Off(OffReason.TUNNEL_FAILED)))
+        assertEquals(true, failed.switchOn)
+        assertEquals(false, failed.running)
+        val stillRunning = state(enabled = false, status = on) // turned off, not stopped yet
+        assertEquals(false, stillRunning.switchOn)
+        assertEquals(true, stillRunning.running)
+    }
+
+    @Test
     fun choosingSeveralTicksAllowedRowsOnly() {
         val s = state(selected = setOf("com.maps", "com.bank"))
         assertEquals(true, s.selecting)
@@ -114,11 +146,19 @@ class HomeStateTest {
     }
 
     @Test
+    fun choosingWhileTheAppsLoadHasNothingTickedYet() {
+        val s = state(apps = null, selected = setOf("com.maps"))
+        assertEquals(true, s.selecting)
+        assertEquals(emptyList<AppEntry>(), s.selectedApps)
+    }
+
+    @Test
     fun healthNotices() {
         assertEquals(emptyList<HomeNotice>(), state(status = on.copy(logHealth = LogHealth.Ok)).notices)
         assertEquals(emptyList<HomeNotice>(), state(status = on.copy(logHealth = LogHealth.Checking)).notices)
         assertEquals(listOf(HomeNotice.LogUnavailable), state(status = on.copy(logHealth = LogHealth.Unavailable("disk full"))).notices)
         assertEquals(listOf(HomeNotice.DroppedTries(12)), state(status = on.copy(droppedTries = 12)).notices)
+        assertEquals(12L, (state(status = on.copy(droppedTries = 12)).notices.single() as HomeNotice.DroppedTries).count)
         assertEquals(listOf(HomeNotice.LimitedAttribution), state(status = on.copy(attribution = Attribution.LIMITED)).notices)
         // Attribution only matters while blocking; a broken log matters always.
         val off = FirewallStatus(FirewallState.Off(OffReason.TURNED_OFF), logHealth = LogHealth.Unavailable("x"), attribution = Attribution.LIMITED)
@@ -128,5 +168,5 @@ class HomeStateTest {
     private fun allowed(s: HomeState) = s.items.filterIsInstance<Row>().filter { !it.blocked }.map { it.app }
 
     private fun app(label: String, pkg: String, system: Boolean = false, service: Boolean = false) =
-        AppEntry(label, pkg, system, service, 0)
+        AppEntry(label, pkg, system, service)
 }

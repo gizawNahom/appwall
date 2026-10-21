@@ -4,7 +4,6 @@ import dev.appwall.core.log.Destination
 import dev.appwall.core.log.LogEntry
 import dev.appwall.core.settings.FirewallPolicy
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 
 /** A timeline day's heading; dates are left to the screen to format. */
@@ -66,7 +65,7 @@ fun appLogState(
         toggle = toggle,
         showTimeline = showTimeline,
         destinations = destinations,
-        meterMax = destinations.maxOfOrNull { it.attempts }?.coerceAtLeast(1) ?: 1,
+        meterMax = destinations.fold(1) { most, place -> maxOf(most, place.attempts) },
         timeline = timeline,
         empty = if (showTimeline) timeline.isEmpty() else destinations.isEmpty(),
         retentionDays = retentionDays,
@@ -74,7 +73,7 @@ fun appLogState(
 }
 
 private fun timelineRows(entries: List<LogEntry>, now: Long, zone: ZoneId): List<TimelineRow> {
-    fun dayOf(time: Long): LocalDate = Instant.ofEpochMilli(time).atZone(zone).toLocalDate()
+    fun dayOf(time: Long) = Instant.ofEpochMilli(time).atZone(zone).toLocalDate()
     val today = dayOf(now)
     return entries.groupBy { dayOf(it.time) }.flatMap { (day, dayEntries) ->
         val label = when (day) {

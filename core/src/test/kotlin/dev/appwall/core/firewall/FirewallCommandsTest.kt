@@ -56,6 +56,16 @@ class FirewallCommandsTest {
         assertEquals(1, stops)
     }
 
+    @Test
+    fun newAppModeAndStartOnBootAreOnlySaved() {
+        settings.policy = FirewallPolicy(enabled = true) // on but not running: these still don't start it
+        commands.setNewAppMode(NewAppMode.BLOCK)
+        commands.setStartOnBoot(false)
+        assertEquals(NewAppMode.BLOCK, settings.policy.newAppMode)
+        assertEquals(false, settings.policy.startOnBoot)
+        assertEquals(0, starts)
+    }
+
     private class FakePolicy : FirewallPolicyReader, FirewallPolicyWriter {
         override var policy = FirewallPolicy()
         override val policyChanged = ChangeSignal(FakeScheduler())

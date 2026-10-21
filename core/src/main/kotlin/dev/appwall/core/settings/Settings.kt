@@ -37,11 +37,20 @@ fun decodeFirewallPolicy(values: Map<String, Any?>): FirewallPolicy {
     val defaults = FirewallPolicy()
     return FirewallPolicy(
         enabled = values[SettingsKeys.ENABLED] as? Boolean ?: defaults.enabled,
-        blocked = (values[SettingsKeys.BLOCKED] as? Set<*>)?.filterIsInstance<String>()?.toSet() ?: defaults.blocked,
-        newAppMode = NewAppMode.entries.firstOrNull { it.name == values[SettingsKeys.NEW_APP_MODE] } ?: defaults.newAppMode,
+        blocked = when (val stored = values[SettingsKeys.BLOCKED]) {
+            is Set<*> -> packageNames(stored)
+            else -> defaults.blocked
+        },
+        newAppMode = newAppModeNamed(values[SettingsKeys.NEW_APP_MODE]) ?: defaults.newAppMode,
         startOnBoot = values[SettingsKeys.START_ON_BOOT] as? Boolean ?: defaults.startOnBoot,
     )
 }
+
+/** The package names in a stored set: its strings (anything else in it can't be one). */
+private fun packageNames(stored: Set<*>): Set<String> = stored.filterIsInstance<String>().toSet()
+
+/** The new-app mode a stored value names, or null if it names none. */
+private fun newAppModeNamed(stored: Any?): NewAppMode? = NewAppMode.entries.firstOrNull { it.name == stored }
 
 fun decodeLogSettings(values: Map<String, Any?>): LogSettings {
     val defaults = LogSettings()
@@ -63,8 +72,8 @@ fun settingsProblems(values: Map<String, Any?>): List<String> {
     fun wrongType(key: String, ok: (Any) -> Boolean) = values[key]?.let { if (ok(it)) null else "$key is ${it::class.simpleName}" }
     return listOfNotNull(
         wrongType(SettingsKeys.ENABLED) { it is Boolean },
-        wrongType(SettingsKeys.BLOCKED) { it is Set<*> && it.all { p -> p is String } },
-        wrongType(SettingsKeys.NEW_APP_MODE) { it is String && NewAppMode.entries.any { m -> m.name == it } },
+        wrongType(SettingsKeys.BLOCKED) { it is Set<*> && packageNames(it).size == it.size },
+        wrongType(SettingsKeys.NEW_APP_MODE) { newAppModeNamed(it) != null },
         wrongType(SettingsKeys.START_ON_BOOT) { it is Boolean },
         wrongType(SettingsKeys.LOGGING) { it is Boolean },
         wrongType(SettingsKeys.LOG_RETENTION_DAYS) { it is Int },
@@ -177,8 +186,8 @@ class StoredSettings(private val store: KeyValueStore, newSignal: () -> ChangeSi
         }
     }
 
-    private companion object {
-        val POLICY_KEYS = setOf(SettingsKeys.ENABLED, SettingsKeys.BLOCKED, SettingsKeys.NEW_APP_MODE, SettingsKeys.START_ON_BOOT)
-        val LOG_KEYS = setOf(SettingsKeys.LOGGING, SettingsKeys.LOG_RETENTION_DAYS)
-    }
 }
+
+/** Which kind a written key belongs to, so a write updates and signals only that kind. */
+private val POLICY_KEYS = setOf(SettingsKeys.ENABLED, SettingsKeys.BLOCKED, SettingsKeys.NEW_APP_MODE, SettingsKeys.START_ON_BOOT)
+private val LOG_KEYS = setOf(SettingsKeys.LOGGING, SettingsKeys.LOG_RETENTION_DAYS)

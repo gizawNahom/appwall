@@ -48,7 +48,6 @@ class InstalledAppsRepository(context: Context, private val executor: Executor) 
                     packageName = pkg.packageName,
                     isSystem = isSystem,
                     isSystemService = isSystem && pm.getLaunchIntentForPackage(pkg.packageName) == null,
-                    installedAt = pkg.firstInstallTime,
                 )
             }
             .sortedBy { it.label.lowercase() }

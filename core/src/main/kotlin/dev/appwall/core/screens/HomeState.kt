@@ -54,12 +54,15 @@ data class HomeState(
     val loading: Boolean,
     /** A search that matches nothing. */
     val noMatch: Boolean,
-    val notices: List<HomeNotice> = emptyList(),
+    val notices: List<HomeNotice>,
     /** Choosing several apps to block: rows show ticks instead of buttons. */
-    val selecting: Boolean = false,
+    val selecting: Boolean,
     /** The ticked apps, in list order, ready to block (or warn about). */
-    val selectedApps: List<AppEntry> = emptyList(),
+    val selectedApps: List<AppEntry>,
 )
+
+/** A–Z by name whatever the case; the package settles a tie, so two apps with one name keep their places. */
+private val byName = compareBy(String.CASE_INSENSITIVE_ORDER, AppEntry::label).thenBy(AppEntry::packageName)
 
 /**
  * The home screen: one list with blocked apps first, then allowed ones, each A–Z, and a calm card
@@ -76,12 +79,11 @@ fun homeState(
     anotherVpnActive: Boolean,
     lastAttempt: Long?,
     query: String,
-    selected: Set<String>? = null,
+    selected: Set<String>?,
 ): HomeState {
     val search = query.trim()
     fun matches(app: AppEntry) =
         search.isEmpty() || app.label.contains(search, ignoreCase = true) || app.packageName.contains(search, ignoreCase = true)
-    val byName = compareBy<AppEntry> { it.label.lowercase() }.thenBy { it.packageName }
     val shown = apps.orEmpty().filter(::matches)
     val blocked = shown.filter { policy.isBlocked(it.packageName) }.sortedWith(byName)
     val allowed = shown
@@ -100,7 +102,8 @@ fun homeState(
     }
 
     val running = status.running
-    val blockedCount = apps?.count { policy.isBlocked(it.packageName) } ?: policy.blocked.size
+    // Installed apps only; until they're known, the policy's count stands in.
+    val blockedCount = if (apps == null) policy.blocked.size else apps.filter { policy.isBlocked(it.packageName) }.size
     val firewall = status.firewall
     val cardLine = when {
         firewall !is FirewallState.Off -> CardLine.Blocking(blockedCount, lastAttempt)

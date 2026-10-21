@@ -10,16 +10,20 @@ class HealthTest {
 
     @Test
     fun decisionTable() {
-        val table = listOf(
-            Triple(ProbeResult.Ok, null, StartupDecision(true, LogHealth.Checking, emptyList())),
-            Triple(ProbeResult.Ok, ProbeResult.Ok, StartupDecision(true, LogHealth.Ok, emptyList())),
+        data class Case(val settings: ProbeResult, val log: ProbeResult?, val mayStart: Boolean, val logHealth: LogHealth, val refused: List<String>)
+        val cases = listOf(
+            Case(ProbeResult.Ok, null, true, LogHealth.Checking, emptyList()),
+            Case(ProbeResult.Ok, ProbeResult.Ok, true, LogHealth.Ok, emptyList()),
             // A broken log never stops blocking.
-            Triple(ProbeResult.Ok, broken, StartupDecision(true, LogHealth.Unavailable("broken"), listOf("log_unavailable"))),
-            Triple(broken, ProbeResult.Ok, StartupDecision(false, LogHealth.Ok, listOf("settings_unreadable"))),
-            Triple(broken, null, StartupDecision(false, LogHealth.Checking, listOf("settings_unreadable"))),
-            Triple(broken, broken, StartupDecision(false, LogHealth.Unavailable("broken"), listOf("settings_unreadable", "log_unavailable"))),
+            Case(ProbeResult.Ok, broken, true, LogHealth.Unavailable("broken"), listOf("log_unavailable")),
+            Case(broken, ProbeResult.Ok, false, LogHealth.Ok, listOf("settings_unreadable")),
+            Case(broken, null, false, LogHealth.Checking, listOf("settings_unreadable")),
+            Case(broken, broken, false, LogHealth.Unavailable("broken"), listOf("settings_unreadable", "log_unavailable")),
         )
-        for ((settings, log, expected) in table) assertEquals("$settings, $log", expected, startupDecision(settings, log))
+        for (c in cases) {
+            val decision = startupDecision(c.settings, c.log)
+            assertEquals("$c", Triple(c.mayStart, c.logHealth, c.refused), Triple(decision.firewallMayStart, decision.logHealth, decision.refused))
+        }
     }
 
     @Test

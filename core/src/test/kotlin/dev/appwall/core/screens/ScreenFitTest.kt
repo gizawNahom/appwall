@@ -24,6 +24,15 @@ class ScreenFitTest {
     }
 
     @Test
+    fun theCardStaysPinnedFromTheMinimumHeightUp() {
+        assertEquals(true, screenFit(widthDp = 384, heightDp = PINNED_HEADER_MIN_HEIGHT_DP, fontScale = 1f).pinnedHeader)
+        assertEquals(false, screenFit(widthDp = 384, heightDp = PINNED_HEADER_MIN_HEIGHT_DP - 1, fontScale = 1f).pinnedHeader)
+        // Twice the text needs twice the height.
+        assertEquals(true, screenFit(widthDp = 384, heightDp = 2 * PINNED_HEADER_MIN_HEIGHT_DP, fontScale = 2f).pinnedHeader)
+        assertEquals(false, screenFit(widthDp = 384, heightDp = 2 * PINNED_HEADER_MIN_HEIGHT_DP - 1, fontScale = 2f).pinnedHeader)
+    }
+
+    @Test
     fun smallTextNeverPinsAShortWindow() {
         // Below 1x the card shrinks, but the list still needs the room.
         assertEquals(false, screenFit(widthDp = 800, heightDp = 360, fontScale = 0.85f).pinnedHeader)

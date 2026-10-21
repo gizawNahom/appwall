@@ -37,6 +37,32 @@ class SettingsTest {
     }
 
     @Test
+    fun aBlockedSetKeepsOnlyItsPackageNames() {
+        assertEquals(setOf("a"), decodeFirewallPolicy(mapOf("blocked" to setOf("a", 1))).blocked)
+        assertEquals(emptySet<String>(), decodeFirewallPolicy(mapOf("blocked" to emptySet<String>())).blocked)
+    }
+
+    @Test
+    fun eachKeyIsCheckedForItsOwnType() {
+        // key, a value it may hold, values it may not
+        val table = listOf(
+            Triple("enabled", true, listOf("yes", 1)),
+            Triple("blocked", setOf("a"), listOf("a", setOf("a", 1), listOf("a"))),
+            Triple("new_app_mode", "ALLOW", listOf("SOMETIMES", "ask", 1)),
+            Triple("start_on_boot", false, listOf("no", 0)),
+            Triple("logging", true, listOf("yes", 1)),
+            Triple("log_retention_days", 30, listOf("30", 30L)),
+            Triple("show_system_apps", false, listOf("no", 0)),
+        )
+        for ((key, good, bads) in table) {
+            assertEquals("$key = $good", emptyList<String>(), settingsProblems(mapOf(key to good)))
+            for (bad in bads) assertEquals("$key = $bad", listOf(key), settingsProblems(mapOf(key to bad)).map { it.substringBefore(" ") })
+        }
+        assertEquals(listOf("log_retention_days is String"), settingsProblems(mapOf("log_retention_days" to "30"))) // names what's there
+        assertEquals(emptyList<String>(), settingsProblems(mapOf("blocked" to emptySet<String>()))) // nothing blocked is fine
+    }
+
+    @Test
     fun theStrictCheckFindsWhatLenientDecodingHides() {
         assertEquals(emptyList<String>(), settingsProblems(emptyMap()))
         assertEquals(emptyList<String>(), settingsProblems(mapOf("blocked" to setOf("a"), "new_app_mode" to "BLOCK", "log_retention_days" to 7, "timers" to setOf<String>())))
@@ -84,11 +110,13 @@ class SettingsTest {
         StoredSettings(store) { ChangeSignal(FakeScheduler()) }.apply {
             setEnabled(true)
             setNewAppMode(NewAppMode.ALLOW)
+            setStartOnBoot(false)
             setLoggingEnabled(false)
         }
         val reread = StoredSettings(store) { ChangeSignal(FakeScheduler()) }
         assertTrue(reread.policy.enabled)
         assertEquals(NewAppMode.ALLOW, reread.policy.newAppMode)
+        assertFalse(reread.policy.startOnBoot)
         assertFalse(reread.logSettings.loggingEnabled)
     }
 

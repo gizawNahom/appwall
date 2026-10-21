@@ -24,6 +24,12 @@ class LogStateTest {
     }
 
     @Test
+    fun theLoggingSwitchShowsTheSetting() {
+        assertEquals(true, logState(apps, 0, IntArray(24), LogSettings(loggingEnabled = true)).loggingEnabled)
+        assertEquals(false, logState(apps, 0, IntArray(24), LogSettings(loggingEnabled = false)).loggingEnabled)
+    }
+
+    @Test
     fun whyItsEmpty() {
         val table = listOf(
             Triple(emptyList<AppSummary>(), true, LogEmpty.NOTHING_YET),
@@ -33,6 +39,7 @@ class LogStateTest {
         for ((rows, logging, expected) in table) {
             assertEquals("logging $logging, ${rows.size} rows", expected, logState(rows, 0, IntArray(24), LogSettings(loggingEnabled = logging)).empty)
         }
+        assertEquals(LogEmpty.entries.toSet(), table.map { it.third }.toSet()) // every reason is covered
     }
 
     @Test

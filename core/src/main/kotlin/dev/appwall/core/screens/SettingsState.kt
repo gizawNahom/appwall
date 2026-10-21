@@ -19,7 +19,7 @@ data class SettingsState(
     val retentionDays: Int,
     val alwaysOnText: AlwaysOnText,
     val alwaysOnLevel: StatusLevel,
-    val showSystemApps: Boolean = false,
+    val showSystemApps: Boolean,
 )
 
 /**
@@ -32,7 +32,7 @@ fun settingsState(
     log: LogSettings,
     alwaysOn: AlwaysOn,
     anotherVpnActive: Boolean,
-    screen: ScreenPrefs = ScreenPrefs(),
+    screen: ScreenPrefs,
 ): SettingsState {
     val (text, level) = when (alwaysOn) {
         AlwaysOn.UNKNOWN -> if (anotherVpnActive) AlwaysOnText.OTHER_VPN to StatusLevel.PROBLEM else AlwaysOnText.UNKNOWN to StatusLevel.NEUTRAL

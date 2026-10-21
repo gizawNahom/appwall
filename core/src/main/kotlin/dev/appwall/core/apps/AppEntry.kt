@@ -10,6 +10,4 @@ data class AppEntry(
      * Preinstalled apps people actually use (Chrome, YouTube) have an icon, so they don't count.
      */
     val isSystemService: Boolean,
-    /** When the app was first installed (epoch ms); for "recently installed" ordering. */
-    val installedAt: Long,
 )

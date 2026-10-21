@@ -49,5 +49,5 @@ class SystemAppWarningTest {
         assertEquals("Accessibility, Device Care and Carrier Services", joinNames(listOf("Accessibility", "Device Care", "Carrier Services"), "and"))
     }
 
-    private fun app(label: String, system: Boolean = false) = AppEntry(label, "pkg." + label.lowercase().replace(" ", ""), system, false, 0)
+    private fun app(label: String, system: Boolean = false) = AppEntry(label, "pkg." + label.lowercase().replace(" ", ""), system, false)
 }

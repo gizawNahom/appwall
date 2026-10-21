@@ -6,7 +6,6 @@ import dev.appwall.core.settings.FirewallPolicy
 import java.time.LocalDateTime
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppLogStateTest {
@@ -42,6 +41,11 @@ class AppLogStateTest {
             ),
             rows,
         )
+        val days = rows.filterIsInstance<TimelineRow.Day>()
+        assertEquals(listOf(DayLabel.Today, DayLabel.Yesterday, DayLabel.Date(at("2026-10-18T00:00"))), days.map { it.label })
+        assertEquals(listOf(2, 1, 1), days.map { it.attempts })
+        assertEquals(at("2026-10-18T00:00"), (days.last().label as DayLabel.Date).startOfDay)
+        assertEquals(listOf(justAfter, justBefore, earlier), rows.filterIsInstance<TimelineRow.Entry>().map { it.entry })
     }
 
     @Test
@@ -55,11 +59,16 @@ class AppLogStateTest {
 
     @Test
     fun theButtonFollowsTheRule() {
-        assertEquals(AppLogToggle.ALLOW, state(blocked = setOf(chrome)).toggle)
-        assertEquals(AppLogToggle.BLOCK, state(blocked = emptySet()).toggle)
-        val unknown = state(packageName = null, blocked = emptySet())
-        assertEquals(AppLogToggle.NONE, unknown.toggle) // no app to allow
-        assertTrue(unknown.blocked)
+        val table = listOf(
+            Triple(chrome, setOf(chrome), true to AppLogToggle.ALLOW),
+            Triple(chrome, emptySet(), false to AppLogToggle.BLOCK),
+            Triple(null, emptySet(), true to AppLogToggle.NONE), // no app to allow; it reached the tunnel, so it's blocked
+        )
+        for ((packageName, blocked, expected) in table) {
+            val s = state(packageName = packageName, blocked = blocked)
+            assertEquals("$packageName, blocked $blocked", expected, s.blocked to s.toggle)
+        }
+        assertEquals(AppLogToggle.entries.toSet(), table.map { it.third.second }.toSet()) // every button is covered
     }
 
     @Test
@@ -70,6 +79,27 @@ class AppLogStateTest {
         assertEquals(9, destinationsTab.meterMax)
         assertEquals(emptyList<TimelineRow>(), destinationsTab.timeline)
         assertEquals(true, state(destinations = places, timeline = true).empty) // no entries
+    }
+
+    @Test
+    fun eachTabShowsItsOwnRows() {
+        val places = listOf(Destination("1.2.3.4", false, listOf(443), 9, 0), Destination("a.example", true, emptyList(), 4, 0))
+        val entries = listOf(entry(at("2026-10-21T00:10")))
+        val destinationsTab = state(destinations = places, entries = entries, timeline = false)
+        assertEquals(false, destinationsTab.showTimeline)
+        assertEquals(places, destinationsTab.destinations)
+        assertEquals(7, destinationsTab.retentionDays)
+        val timelineTab = state(destinations = places, entries = entries, timeline = true)
+        assertEquals(true, timelineTab.showTimeline)
+        assertEquals(false, timelineTab.empty)
+    }
+
+    @Test
+    fun theFullMeterIsTheMostTriesToOnePlaceAndNeverZero() {
+        fun place(attempts: Int) = Destination("a.example", true, emptyList(), attempts, 0)
+        assertEquals(9, state(destinations = listOf(place(9), place(4)), timeline = false).meterMax) // the most, wherever it is
+        assertEquals(1, state(destinations = listOf(place(1)), timeline = false).meterMax)
+        assertEquals(1, state(destinations = listOf(place(0)), timeline = false).meterMax)
         assertEquals(1, state(timeline = false).meterMax)
     }
 }
