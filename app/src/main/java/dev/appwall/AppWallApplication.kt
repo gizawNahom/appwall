@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import dev.appwall.core.log.TryQueue
+import dev.appwall.core.settings.StoredSettings
 import dev.appwall.core.state.ChangeSignal
 import dev.appwall.core.state.FirewallStatusBoard
 import dev.appwall.core.state.Scheduler
@@ -47,6 +48,10 @@ class AppWallApplication : Application() {
     lateinit var tries: TryQueue
         private set
 
+    /** The firewall policy, log settings and screen preferences, as snapshots kept current by their writers. */
+    lateinit var settings: StoredSettings
+        private set
+
     /** Installed apps, loaded off the UI thread and remembered between screens. */
     lateinit var apps: InstalledAppsRepository
         private set
@@ -58,11 +63,11 @@ class AppWallApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         db = Executors.newSingleThreadScheduledExecutor { Thread(it, "appwall-db").also { thread -> dbThread = thread } }
-        val rules = Rules(this)
+        settings = StoredSettings(PrefsStore(this)) { ChangeSignal(MainThreadScheduler) }
         logChanged = ChangeSignal(MainThreadScheduler)
         log = SqlBlockLog(
             AndroidSqlDb(this, SqlBlockLog.FILE, SqlBlockLog.VERSION, SqlBlockLog::create),
-            retentionDays = { rules.logRetentionDays },
+            retentionDays = { settings.logSettings.retentionDays },
             onDbThread = { Thread.currentThread() === dbThread },
             changed = logChanged::notifyChanged,
         )

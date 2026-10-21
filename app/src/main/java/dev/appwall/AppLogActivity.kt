@@ -24,7 +24,7 @@ import java.util.Calendar
  */
 class AppLogActivity : Activity() {
 
-    private lateinit var rules: Rules
+    private val settings get() = appWall.settings
     /** Null for traffic AppWall couldn't attribute to an app. */
     private var packageName: String? = null
     private var showTimeline = false
@@ -43,7 +43,6 @@ class AppLogActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_app_log)
-        rules = Rules(this)
         packageName = intent.getStringExtra(EXTRA_PACKAGE)
         showTimeline = savedInstanceState?.getBoolean(STATE_TIMELINE) ?: false
 
@@ -61,8 +60,8 @@ class AppLogActivity : Activity() {
             visibility = if (pkg == null) View.GONE else View.VISIBLE
             setOnClickListener {
                 if (pkg == null) return@setOnClickListener
-                rules.setBlocked(pkg, !rules.isBlocked(pkg))
-                if (rules.enabled) {
+                settings.setBlocked(listOf(pkg), !settings.policy.isBlocked(pkg))
+                if (settings.policy.enabled) {
                     startService(Intent(this@AppLogActivity, FirewallVpnService::class.java).setAction(FirewallVpnService.ACTION_APPLY))
                 }
                 updateState(label)
@@ -90,7 +89,7 @@ class AppLogActivity : Activity() {
     /** The "● BLOCKED" / "ALLOWED" tag and the button that flips it. */
     private fun updateState(label: String) {
         val pkg = packageName
-        val blocked = pkg == null || rules.isBlocked(pkg)
+        val blocked = pkg == null || settings.policy.isBlocked(pkg)
         findViewById<TextView>(R.id.app_log_state).apply {
             setText(if (blocked) R.string.state_blocked else R.string.state_allowed)
             setCompoundDrawablesRelativeWithIntrinsicBounds(if (blocked) R.drawable.dot_blocked else 0, 0, 0, 0)
@@ -109,7 +108,7 @@ class AppLogActivity : Activity() {
     }
 
     private fun show(places: List<Destination>, entries: List<LogEntry>?) {
-        val days = rules.logRetentionDays
+        val days = settings.logSettings.retentionDays
         destinations.items = places
         destinations.max = destinations.items.maxOfOrNull { it.attempts } ?: 1
         if (entries != null) timeline.setEntries(entries)

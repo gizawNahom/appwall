@@ -20,7 +20,7 @@ import java.util.Calendar
  */
 class LogActivity : Activity() {
 
-    private lateinit var rules: Rules
+    private val settings get() = appWall.settings
     private lateinit var icons: AppIcons
     private val adapter = AppsAdapter()
 
@@ -37,7 +37,6 @@ class LogActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_log)
-        rules = Rules(this)
         icons = AppIcons(this)
 
         findViewById<View>(R.id.log_back).setOnClickListener { finish() }
@@ -76,7 +75,7 @@ class LogActivity : Activity() {
     private class LogStats(val apps: List<AppSummary>, val today: Int, val hourly: IntArray)
 
     private fun show(stats: LogStats) {
-        val days = rules.logRetentionDays
+        val days = settings.logSettings.retentionDays
         adapter.apps = stats.apps
         adapter.notifyDataSetChanged()
 
@@ -85,13 +84,13 @@ class LogActivity : Activity() {
             findViewById<View>(it).visibility = if (hasEntries) View.VISIBLE else View.GONE
         }
         findViewById<View>(R.id.log_empty).visibility = if (hasEntries) View.GONE else View.VISIBLE
-        findViewById<TextView>(R.id.log_footer).text = if (rules.loggingEnabled) {
+        findViewById<TextView>(R.id.log_footer).text = if (settings.logSettings.loggingEnabled) {
             resources.getQuantityString(R.plurals.log_footer, days, days)
         } else {
             getString(R.string.log_footer_off)
         }
         if (!hasEntries) {
-            val off = !rules.loggingEnabled
+            val off = !settings.logSettings.loggingEnabled
             findViewById<TextView>(R.id.log_empty_title).setText(if (off) R.string.log_off_title else R.string.log_empty_title)
             findViewById<TextView>(R.id.log_empty_body).setText(if (off) R.string.log_off_body else R.string.log_empty_body)
             findViewById<View>(R.id.log_open_settings).visibility = if (off) View.VISIBLE else View.GONE

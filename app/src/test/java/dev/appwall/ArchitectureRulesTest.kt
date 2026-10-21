@@ -52,6 +52,17 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    fun settingsGoThroughTheirPorts() {
+        // Step 10a: Rules is gone; the tunnel session and screen loaders can only read settings.
+        val offenders = sources.filter { it.readText().contains(Regex("""\bRules\(""")) }
+        assertEquals(emptyList<String>(), offenders.map { it.name })
+        val readOnly = listOf("tunnel/TunnelSession.kt", "state/ScreenLoader.kt").map { File("../core/src/main/kotlin/dev/appwall/core/$it") }
+        assertEquals(true, readOnly.all { it.exists() })
+        val writing = readOnly.filter { it.readText().contains(Regex("""Writer|StoredSettings|\.set[A-Z]""")) }
+        assertEquals(emptyList<String>(), writing.map { it.name })
+    }
+
+    @Test
     fun sourcesWereFound() {
         // Guards the rules above against passing vacuously if the source path is wrong.
         assertEquals(true, sources.any { it.name == "MainActivity.kt" })

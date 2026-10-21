@@ -18,17 +18,16 @@ import dev.appwall.core.state.Subscription
 
 class SettingsActivity : Activity() {
 
-    private lateinit var rules: Rules
+    private val settings get() = appWall.settings
     private var statusSubscription: Subscription? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
-        rules = Rules(this)
         findViewById<View>(R.id.settings_back).setOnClickListener { finish() }
 
         // Firewall
-        bindSwitch(R.id.start_on_boot_row, R.id.start_on_boot, rules.startOnBoot) { rules.startOnBoot = it }
+        bindSwitch(R.id.start_on_boot_row, R.id.start_on_boot, settings.policy.startOnBoot) { settings.setStartOnBoot(it) }
         // Apps can't turn on Always-on VPN themselves, and Android has no link to one VPN's own
         // page, only to the list of VPNs. So explain the steps first, then open that list.
         findViewById<View>(R.id.always_on).setOnClickListener {
@@ -43,30 +42,32 @@ class SettingsActivity : Activity() {
         // New apps
         findViewById<RadioGroup>(R.id.new_app_mode).apply {
             check(
-                when (rules.newAppMode) {
+                when (settings.policy.newAppMode) {
                     NewAppMode.ASK -> R.id.new_app_ask
                     NewAppMode.ALLOW -> R.id.new_app_allow
                     NewAppMode.BLOCK -> R.id.new_app_block
                 }
             )
             setOnCheckedChangeListener { _, id ->
-                rules.newAppMode = when (id) {
-                    R.id.new_app_allow -> NewAppMode.ALLOW
-                    R.id.new_app_block -> NewAppMode.BLOCK
-                    else -> NewAppMode.ASK
-                }
+                settings.setNewAppMode(
+                    when (id) {
+                        R.id.new_app_allow -> NewAppMode.ALLOW
+                        R.id.new_app_block -> NewAppMode.BLOCK
+                        else -> NewAppMode.ASK
+                    }
+                )
             }
         }
 
         // Blocked traffic log
-        bindSwitch(R.id.logging_row, R.id.logging, rules.loggingEnabled) { rules.loggingEnabled = it }
+        bindSwitch(R.id.logging_row, R.id.logging, settings.logSettings.loggingEnabled) { settings.setLoggingEnabled(it) }
         val segments = listOf(R.id.retention_1 to 1, R.id.retention_7 to 7, R.id.retention_30 to 30)
         fun showRetention() = segments.forEach { (id, days) ->
-            findViewById<View>(id).isSelected = days == rules.logRetentionDays
+            findViewById<View>(id).isSelected = days == settings.logSettings.retentionDays
         }
         segments.forEach { (id, days) ->
             findViewById<View>(id).setOnClickListener {
-                rules.logRetentionDays = days
+                settings.setLogRetentionDays(days)
                 onDb({ it.prune() }) {}
                 showRetention()
             }

@@ -9,6 +9,7 @@ import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
 import dev.appwall.core.apps.AppEntry
+import dev.appwall.core.settings.FirewallPolicyReader
 
 /**
  * The home list. On the Blocked tab: blocked apps, busiest first, with today's attempts. On the
@@ -20,7 +21,7 @@ import dev.appwall.core.apps.AppEntry
  */
 class AppListAdapter(
     private val context: Context,
-    private val rules: Rules,
+    private val settings: FirewallPolicyReader,
     private val icons: AppIcons,
     private val onAction: (AppEntry, Action) -> Unit,
 ) : BaseAdapter() {
@@ -96,15 +97,15 @@ class AppListAdapter(
     /** Re-reads the block rules, e.g. after an app was blocked or allowed. */
     fun refresh() = refilter()
 
-    fun blockedCount() = allApps.count { rules.isBlocked(it.packageName) }
+    fun blockedCount() = allApps.count { settings.policy.isBlocked(it.packageName) }
 
-    fun allowedCount() = allApps.count { !rules.isBlocked(it.packageName) && (showSystem || !it.isSystemService) }
+    fun allowedCount() = allApps.count { !settings.policy.isBlocked(it.packageName) && (showSystem || !it.isSystemService) }
 
     private fun matches(app: AppEntry) =
         query.isEmpty() || app.label.contains(query, ignoreCase = true) || app.packageName.contains(query, ignoreCase = true)
 
     private fun refilter() {
-        val blocked = rules.blocked()
+        val blocked = settings.policy.blocked
         shown = when (tab) {
             // Every blocked app, including system services hidden from the Allowed tab.
             Tab.BLOCKED -> allApps
@@ -127,7 +128,7 @@ class AppListAdapter(
         val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.item_app, parent, false)
         val app = shown[position]
         val attempts = attemptsToday[app.packageName] ?: 0
-        val blocked = rules.isBlocked(app.packageName)
+        val blocked = settings.policy.isBlocked(app.packageName)
         val isExpanded = expanded == app.packageName
         val showActivity = tab == Tab.BLOCKED
 

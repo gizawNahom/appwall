@@ -27,7 +27,7 @@ object NewAppNotifier {
 
     /** Returns true if the block rules changed (the app was blocked automatically). */
     fun onInstalled(context: Context, packageName: String): Boolean {
-        val rules = Rules(context)
+        val settings = context.appWall.settings
         val pm = context.packageManager
         val info = try {
             pm.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS)
@@ -35,16 +35,16 @@ object NewAppNotifier {
             null
         }
         val decision = newAppDecision(
-            mode = rules.newAppMode,
+            mode = settings.policy.newAppMode,
             isSelf = packageName == context.packageName,
-            alreadyBlocked = rules.isBlocked(packageName),
+            alreadyBlocked = settings.policy.isBlocked(packageName),
             usesInternet = info?.let { it.requestedPermissions?.contains(Manifest.permission.INTERNET) == true },
         )
         if (decision == NewAppDecision.IGNORE) return false
         val label = info?.applicationInfo?.loadLabel(pm)?.toString() ?: packageName
 
         if (decision == NewAppDecision.AUTO_BLOCK) {
-            rules.setBlocked(packageName, true)
+            settings.setBlocked(listOf(packageName), true)
             post(
                 context, packageName,
                 title = context.getString(R.string.new_app_blocked_title, label),

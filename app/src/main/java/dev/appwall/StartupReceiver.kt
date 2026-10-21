@@ -12,14 +12,14 @@ import android.util.Log
  */
 class StartupReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val rules = Rules(context)
+        val settings = context.appWall.settings
         val wanted = when (intent.action) {
-            Intent.ACTION_BOOT_COMPLETED -> rules.startOnBoot
+            Intent.ACTION_BOOT_COMPLETED -> settings.policy.startOnBoot
             Intent.ACTION_MY_PACKAGE_REPLACED -> true
             else -> false
         }
         // Only if it was on before, and we still hold the VPN permission (no dialog possible here).
-        if (!wanted || !rules.enabled || VpnService.prepare(context) != null) return
+        if (!wanted || !settings.policy.enabled || VpnService.prepare(context) != null) return
         try {
             context.startForegroundService(
                 Intent(context, FirewallVpnService::class.java).setAction(FirewallVpnService.ACTION_APPLY)

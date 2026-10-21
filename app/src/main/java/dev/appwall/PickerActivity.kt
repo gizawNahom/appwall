@@ -29,7 +29,7 @@ class PickerActivity : Activity() {
      */
     private enum class Filter { APPS, RECENT, SYSTEM }
 
-    private lateinit var rules: Rules
+    private val settings get() = appWall.settings
     private lateinit var icons: AppIcons
     private val adapter = PickAdapter()
     private var allowed: List<AppEntry> = emptyList()
@@ -41,7 +41,6 @@ class PickerActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_picker)
-        rules = Rules(this)
         icons = AppIcons(this)
         savedInstanceState?.getStringArray(STATE_PICKED)?.let { picked += it }
 
@@ -90,7 +89,7 @@ class PickerActivity : Activity() {
     }
 
     private fun setApps(apps: List<AppEntry>) {
-        allowed = apps.filter { !rules.isBlocked(it.packageName) }
+        allowed = apps.filter { !settings.policy.isBlocked(it.packageName) }
         findViewById<TextView>(R.id.allowed_total).text = getString(R.string.picker_allowed_total, allowed.size)
         refilter()
     }

@@ -31,7 +31,7 @@ import java.util.Calendar
 
 class MainActivity : Activity() {
 
-    private lateinit var rules: Rules
+    private val settings get() = appWall.settings
     private lateinit var adapter: AppListAdapter
     private lateinit var firewallSwitch: Switch
     private lateinit var icons: AppIcons
@@ -68,7 +68,6 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        rules = Rules(this)
         icons = AppIcons(this)
 
         findViewById<View>(R.id.open_settings).setOnClickListener {
@@ -92,8 +91,8 @@ class MainActivity : Activity() {
             if (on) requestStart() else stopFirewall()
         }
 
-        adapter = AppListAdapter(this, rules, icons) { app, action -> onRowAction(app, action) }
-        adapter.setShowSystem(rules.showSystemApps)
+        adapter = AppListAdapter(this, settings, icons) { app, action -> onRowAction(app, action) }
+        adapter.setShowSystem(settings.screenPrefs.showSystemApps)
         findViewById<ListView>(R.id.app_list).apply {
             adapter = this@MainActivity.adapter
             setOnItemClickListener { _, _, position, _ -> onAppTapped(this@MainActivity.adapter.getItem(position)) }
@@ -118,9 +117,9 @@ class MainActivity : Activity() {
         })
 
         findViewById<CheckBox>(R.id.show_system).apply {
-            isChecked = rules.showSystemApps
+            isChecked = settings.screenPrefs.showSystemApps
             setOnCheckedChangeListener { _, show ->
-                rules.showSystemApps = show
+                settings.setShowSystemApps(show)
                 adapter.setShowSystem(show)
                 refreshState()
             }
@@ -128,10 +127,10 @@ class MainActivity : Activity() {
         selectTab(AppListAdapter.Tab.BLOCKED)
 
         // The service may have died (app update, killed by Android) while the firewall was on.
-        if (rules.enabled) {
-            if (VpnService.prepare(this) == null) sendToService(FirewallVpnService.ACTION_APPLY) else rules.enabled = false
+        if (settings.policy.enabled) {
+            if (VpnService.prepare(this) == null) sendToService(FirewallVpnService.ACTION_APPLY) else settings.setEnabled(false)
         }
-        if (rules.enabled) requestNotificationPermission()
+        if (settings.policy.enabled) requestNotificationPermission()
 
         loadApps()
         if (savedInstanceState == null) askAboutNewApp(intent)
@@ -159,7 +158,7 @@ class MainActivity : Activity() {
             .setTitle(getString(R.string.new_app_dialog_title, label))
             .setMessage(R.string.new_app_dialog_text)
             .setPositiveButton(R.string.block) { _, _ ->
-                rules.setBlocked(packageName, true)
+                settings.setBlocked(listOf(packageName), true)
                 onRulesChanged()
             }
             .setNegativeButton(R.string.allow, null)
@@ -247,7 +246,7 @@ class MainActivity : Activity() {
     }
 
     private fun startFirewall() {
-        rules.enabled = true
+        settings.setEnabled(true)
         sendToService(FirewallVpnService.ACTION_APPLY)
         refreshState()
         requestNotificationPermission()
@@ -265,37 +264,37 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         // Re-post the status so the notification appears now that it's allowed.
-        if (requestCode == REQUEST_NOTIFICATIONS && rules.enabled) sendToService(FirewallVpnService.ACTION_APPLY)
+        if (requestCode == REQUEST_NOTIFICATIONS && settings.policy.enabled) sendToService(FirewallVpnService.ACTION_APPLY)
     }
 
     private fun stopFirewall() {
-        rules.enabled = false
+        settings.setEnabled(false)
         sendToService(FirewallVpnService.ACTION_STOP)
         refreshState()
     }
 
     private fun onRulesChanged() {
-        if (rules.enabled) sendToService(FirewallVpnService.ACTION_APPLY)
+        if (settings.policy.enabled) sendToService(FirewallVpnService.ACTION_APPLY)
         adapter.refresh()
         refreshState()
     }
 
     /** A button in a row: change the app's rule (with a few seconds to undo it), or open its log. */
     private fun onRowAction(app: AppEntry, action: AppListAdapter.Action) {
-        val wasBlocked = rules.isBlocked(app.packageName)
+        val wasBlocked = settings.policy.isBlocked(app.packageName)
         when (action) {
             AppListAdapter.Action.FULL_LOG -> {
                 startActivity(AppLogActivity.intent(this, app.packageName))
                 return
             }
-            AppListAdapter.Action.TOGGLE -> rules.setBlocked(app.packageName, !wasBlocked)
-            AppListAdapter.Action.ALLOW -> rules.setBlocked(app.packageName, false)
-            AppListAdapter.Action.BLOCK -> rules.setBlocked(app.packageName, true)
+            AppListAdapter.Action.TOGGLE -> settings.setBlocked(listOf(app.packageName), !wasBlocked)
+            AppListAdapter.Action.ALLOW -> settings.setBlocked(listOf(app.packageName), false)
+            AppListAdapter.Action.BLOCK -> settings.setBlocked(listOf(app.packageName), true)
         }
         onRulesChanged()
-        val message = getString(if (rules.isBlocked(app.packageName)) R.string.undo_blocked else R.string.undo_allowed, app.label)
+        val message = getString(if (settings.policy.isBlocked(app.packageName)) R.string.undo_blocked else R.string.undo_allowed, app.label)
         showUndo(message) {
-            rules.setBlocked(app.packageName, wasBlocked)
+            settings.setBlocked(listOf(app.packageName), wasBlocked)
             onRulesChanged()
         }
     }
@@ -303,7 +302,7 @@ class MainActivity : Activity() {
     /** Apps chosen in the picker: block them all, with one Undo for the lot. */
     private fun blockPicked(packages: List<String>) {
         if (packages.isEmpty()) return
-        packages.forEach { rules.setBlocked(it, true) }
+        settings.setBlocked(packages, true)
         onRulesChanged()
         selectTab(AppListAdapter.Tab.BLOCKED)
         val message = if (packages.size == 1) {
@@ -313,7 +312,7 @@ class MainActivity : Activity() {
             resources.getQuantityString(R.plurals.undo_blocked_n, packages.size, packages.size)
         }
         showUndo(message) {
-            packages.forEach { rules.setBlocked(it, false) }
+            settings.setBlocked(packages, false)
             onRulesChanged()
         }
     }
@@ -433,12 +432,12 @@ class MainActivity : Activity() {
 
     private fun refreshState() {
         updatingSwitch = true
-        firewallSwitch.isChecked = rules.enabled
+        firewallSwitch.isChecked = settings.policy.enabled
         updatingSwitch = false
 
         // The switch says what the user chose; the card says what the firewall is actually doing.
         val on = appWall.firewallStatus.status.running
-        val blockedCount = if (appsLoaded) adapter.blockedCount() else rules.blocked().size
+        val blockedCount = if (appsLoaded) adapter.blockedCount() else settings.policy.blocked.size
         findViewById<ImageView>(R.id.status_dot).setImageLevel(if (on) 1 else 0)
         findViewById<TextView>(R.id.wall_state).setText(if (on) R.string.wall_up else R.string.wall_down)
         findViewById<TextView>(R.id.headline).text = when {
@@ -468,7 +467,7 @@ class MainActivity : Activity() {
         adapter.setAttemptsToday(today)
         adapter.details = stats.details
         val total = today.values.sum()
-        val blockedCount = if (appsLoaded) adapter.blockedCount() else rules.blocked().size
+        val blockedCount = if (appsLoaded) adapter.blockedCount() else settings.policy.blocked.size
 
         val firewall = appWall.firewallStatus.status.firewall
         findViewById<TextView>(R.id.attempts_today).text = when {
@@ -489,7 +488,7 @@ class MainActivity : Activity() {
     }
 
     private fun refreshTabs() {
-        val blocked = if (appsLoaded) adapter.blockedCount() else rules.blocked().size
+        val blocked = if (appsLoaded) adapter.blockedCount() else settings.policy.blocked.size
         val allowed = adapter.allowedCount()
         findViewById<TextView>(R.id.tab_blocked).text = tabLabel(R.string.tab_blocked, blocked)
         findViewById<TextView>(R.id.tab_allowed).text = tabLabel(R.string.tab_allowed, if (appsLoaded) allowed else null)
