@@ -11,7 +11,7 @@ import org.junit.Test
 class FirewallStatusBoardTest {
 
     private val scheduler = FakeScheduler()
-    private val board = FirewallStatusBoard(ChangeSignal(scheduler, scheduler::now))
+    private val board = FirewallStatusBoard(ChangeSignal(scheduler))
     private var heard = 0
 
     init {
@@ -31,8 +31,51 @@ class FirewallStatusBoardTest {
         assertTrue(board.status.running)
         board.publish(FirewallStatus(On(3), AlwaysOn.ON))
         assertTrue(board.status.running)
+        assertEquals(3, (board.status.firewall as On).routedApps)
         board.publish(FirewallStatus(On(0)))
         assertTrue(board.status.running) // on, nothing to block
+        assertEquals(0, (board.status.firewall as On).routedApps)
+    }
+
+    @Test
+    fun stoppingBeforeTheServiceSaidWhyGivesTheStopsReason() {
+        board.stopped(OffReason.NO_PERMISSION)
+        assertEquals(Off(OffReason.NO_PERMISSION), board.status.firewall)
+    }
+
+    @Test
+    fun stoppingKeepsAnyReasonTheServiceGave() {
+        for (given in OffReason.entries - OffReason.NOT_RUNNING) {
+            val board = FirewallStatusBoard(ChangeSignal(scheduler))
+            board.publish(FirewallStatus(Off(given)))
+            board.stopped(OffReason.TURNED_OFF)
+            assertEquals(given.name, Off(given), board.status.firewall)
+        }
+    }
+
+    @Test
+    fun stoppingForgetsEveryAlwaysOnSetting() {
+        for (setting in AlwaysOn.entries) {
+            board.publish(FirewallStatus(On(1), setting))
+            board.stopped(OffReason.TURNED_OFF)
+            assertEquals(setting.name, AlwaysOn.UNKNOWN, board.status.alwaysOn)
+        }
+    }
+
+    @Test
+    fun theServicesUpdatesKeepTheAttribution() {
+        for (attribution in Attribution.entries) {
+            board.setAttribution(attribution)
+            board.publish(FirewallStatus(On(1), attribution = Attribution.FULL))
+            assertEquals(attribution, board.status.attribution)
+        }
+    }
+
+    @Test
+    fun anUnusableLogSaysWhyThroughTheServicesUpdates() {
+        board.setLogHealth(LogHealth.Unavailable("disk full"))
+        board.publish(FirewallStatus(On(1)))
+        assertEquals("disk full", (board.status.logHealth as LogHealth.Unavailable).reason)
     }
 
     @Test

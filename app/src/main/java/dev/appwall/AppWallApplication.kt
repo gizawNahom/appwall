@@ -8,6 +8,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import dev.appwall.apps.InstalledAppsRepository
 import dev.appwall.core.log.TryQueue
@@ -195,11 +196,15 @@ fun <T> Activity.logLoader(query: () -> (SqlBlockLog) -> T, show: (T) -> Unit): 
 /** Delivers on Android's main (UI) thread. */
 private object MainThreadScheduler : Scheduler {
     private val handler = Handler(Looper.getMainLooper())
-    override fun post(task: () -> Unit) {
+
+    /** The clock a Handler's delays count by. */
+    override val now: Long get() = SystemClock.uptimeMillis()
+
+    override fun post(task: Runnable) {
         handler.post(task)
     }
 
-    override fun postDelayed(delayMs: Long, task: () -> Unit) {
+    override fun postDelayed(delayMs: Long, task: Runnable) {
         handler.postDelayed(task, delayMs)
     }
 }

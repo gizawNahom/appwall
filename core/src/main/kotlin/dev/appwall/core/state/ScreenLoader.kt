@@ -10,8 +10,8 @@ import java.util.concurrent.atomic.AtomicReference
  *
  * [prepare] runs on the UI thread and returns the load to run on the [worker], so it can capture
  * what the screen currently shows (a tab, an expanded row). Reloads asked for while one is still
- * queued collapse into it, running the newest load. Results reach [show] on the UI thread, and
- * never after [stop]; a load that throws goes to [onError] instead.
+ * queued collapse into it, running the newest load; [stop] drops it. Results reach [show] on the
+ * UI thread, and never after [stop]; a load that throws goes to [onError] instead.
  */
 class ScreenLoader<T>(
     private val worker: Executor,
@@ -35,6 +35,7 @@ class ScreenLoader<T>(
         started = false
         subscriptions.forEach(Subscription::unsubscribe)
         subscriptions = emptyList()
+        queued.set(null) // a load that hasn't begun is no longer wanted
     }
 
     fun reload() {

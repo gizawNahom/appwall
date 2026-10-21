@@ -10,7 +10,7 @@ class ChangeSignalTest {
 
     @Test
     fun listenersHearAChangeOnTheSchedulersThread() {
-        val signal = ChangeSignal(scheduler, scheduler::now)
+        val signal = ChangeSignal(scheduler)
         signal.subscribe { heard++ }
         signal.notifyChanged()
         assertEquals(0, heard) // not on the caller's thread
@@ -20,7 +20,7 @@ class ChangeSignalTest {
 
     @Test
     fun changesBeforeADeliveryAreCoalesced() {
-        val signal = ChangeSignal(scheduler, scheduler::now)
+        val signal = ChangeSignal(scheduler)
         signal.subscribe { heard++ }
         repeat(10) { signal.notifyChanged() } // e.g. ten apps blocked at once
         scheduler.advance()
@@ -30,7 +30,7 @@ class ChangeSignalTest {
 
     @Test
     fun noDeliveryAfterUnsubscribing() {
-        val signal = ChangeSignal(scheduler, scheduler::now)
+        val signal = ChangeSignal(scheduler)
         val subscription = signal.subscribe { heard++ }
         signal.notifyChanged()
         subscription.unsubscribe() // e.g. the screen stopped before the delivery ran
@@ -39,8 +39,21 @@ class ChangeSignalTest {
     }
 
     @Test
+    fun unsubscribingOneListenerLeavesTheOthers() {
+        val signal = ChangeSignal(scheduler)
+        var other = 0
+        val subscription = signal.subscribe { heard++ }
+        signal.subscribe { other++ }
+        subscription.unsubscribe()
+        signal.notifyChanged()
+        scheduler.advance()
+        assertEquals(0, heard)
+        assertEquals(1, other)
+    }
+
+    @Test
     fun everyListenerHearsIt() {
-        val signal = ChangeSignal(scheduler, scheduler::now)
+        val signal = ChangeSignal(scheduler)
         var other = 0
         signal.subscribe { heard++ }
         signal.subscribe { other++ }
@@ -52,7 +65,7 @@ class ChangeSignalTest {
 
     @Test
     fun throttledDeliveriesAreSpacedOut() {
-        val signal = ChangeSignal(scheduler, scheduler::now, throttleMs = 1_000)
+        val signal = ChangeSignal(scheduler, throttleMs = 1_000)
         signal.subscribe { heard++ }
         signal.notifyChanged()
         scheduler.advance()
@@ -65,8 +78,30 @@ class ChangeSignalTest {
     }
 
     @Test
+    fun aThrottledChangeLongAfterTheLastDeliveryGoesStraightOut() {
+        val signal = ChangeSignal(scheduler, throttleMs = 1_000)
+        signal.subscribe { heard++ }
+        signal.notifyChanged()
+        scheduler.advance(5_000)
+        signal.notifyChanged()
+        scheduler.advance()
+        assertEquals(2, heard)
+    }
+
+    @Test
+    fun aThrottledChangeExactlyOneIntervalLaterGoesStraightOut() {
+        val signal = ChangeSignal(scheduler, throttleMs = 1_000)
+        signal.subscribe { heard++ }
+        signal.notifyChanged()
+        scheduler.advance(1_000)
+        signal.notifyChanged()
+        scheduler.advance()
+        assertEquals(2, heard)
+    }
+
+    @Test
     fun theLastChangeOfABurstIsAlwaysDelivered() {
-        val signal = ChangeSignal(scheduler, scheduler::now, throttleMs = 1_000)
+        val signal = ChangeSignal(scheduler, throttleMs = 1_000)
         signal.subscribe { heard++ }
         // A stream of tries: a change every 100 ms for 3 seconds, then quiet.
         repeat(30) {
@@ -80,7 +115,7 @@ class ChangeSignalTest {
 
     @Test
     fun aChangeDuringADeliveryIsDeliveredToo() {
-        val signal = ChangeSignal(scheduler, scheduler::now)
+        val signal = ChangeSignal(scheduler)
         signal.subscribe {
             heard++
             if (heard == 1) signal.notifyChanged()

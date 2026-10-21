@@ -2,13 +2,13 @@ package dev.appwall.core.state
 
 /** Runs posted tasks only when the test advances time, like a main thread under the test's control. */
 class FakeScheduler : Scheduler {
-    var now = 0L
+    override var now = 0L
         private set
-    private val tasks = ArrayList<Pair<Long, () -> Unit>>()
+    private val tasks = ArrayList<Pair<Long, Runnable>>()
 
-    override fun post(task: () -> Unit) = postDelayed(0, task)
+    override fun post(task: Runnable) = postDelayed(0, task)
 
-    override fun postDelayed(delayMs: Long, task: () -> Unit) {
+    override fun postDelayed(delayMs: Long, task: Runnable) {
         tasks += (now + delayMs) to task
     }
 
@@ -21,7 +21,7 @@ class FakeScheduler : Scheduler {
             val next = tasks.filter { it.first <= until }.minByOrNull { it.first } ?: break
             tasks.remove(next)
             now = maxOf(now, next.first)
-            next.second()
+            next.second.run()
         }
         now = until
     }

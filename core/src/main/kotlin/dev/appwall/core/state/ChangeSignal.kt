@@ -1,11 +1,12 @@
 package dev.appwall.core.state
 
-import java.util.concurrent.CopyOnWriteArrayList
-
-/** Runs tasks on the thread listeners expect, e.g. Android's main thread. */
+/** Runs tasks on the thread listeners expect, e.g. Android's main thread, by its clock. */
 interface Scheduler {
-    fun post(task: () -> Unit)
-    fun postDelayed(delayMs: Long, task: () -> Unit)
+    /** The time on the clock [postDelayed] counts by, in milliseconds. */
+    val now: Long
+    fun post(task: Runnable)
+    /** Runs [task] after [delayMs]; at once, like [post], if that's 0 or less. */
+    fun postDelayed(delayMs: Long, task: Runnable)
 }
 
 /** Stops a listener from hearing about further changes. */
@@ -22,32 +23,32 @@ fun interface Subscription {
  */
 class ChangeSignal(
     private val scheduler: Scheduler,
-    private val clock: () -> Long = System::currentTimeMillis,
     private val throttleMs: Long = 0,
 ) {
-    private val listeners = CopyOnWriteArrayList<() -> Unit>()
     private val lock = Any()
+    /** Replaced as a whole on every change, so a delivery can go through it without the lock. */
+    @Volatile private var listeners = emptyList<() -> Unit>()
     private var scheduled = false
     private var lastDelivery: Long? = null
 
     fun subscribe(listener: () -> Unit): Subscription {
-        listeners += listener
-        return Subscription { listeners -= listener }
+        synchronized(lock) { listeners = listeners + listener }
+        return Subscription { synchronized(lock) { listeners = listeners - listener } }
     }
 
     fun notifyChanged() {
         val wait = synchronized(lock) {
             if (scheduled) return
             scheduled = true
-            lastDelivery?.let { it + throttleMs - clock() } ?: 0
+            lastDelivery?.let { it + throttleMs - scheduler.now } ?: 0
         }
-        if (wait > 0) scheduler.postDelayed(wait, ::deliver) else scheduler.post(::deliver)
+        scheduler.postDelayed(wait, ::deliver)
     }
 
     private fun deliver() {
         synchronized(lock) {
             scheduled = false
-            lastDelivery = clock()
+            lastDelivery = scheduler.now
         }
         // A change during this delivery schedules another, so none is lost.
         for (listener in listeners) listener()
