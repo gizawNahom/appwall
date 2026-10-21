@@ -17,7 +17,8 @@ data class BlockedTry(val owner: String?, val packet: Packet, val time: Long)
  */
 class TryQueue(
     capacity: Int = CAPACITY,
-    private val clock: () -> Long = System::currentTimeMillis,
+    /** Stamps each try; the app passes the system clock. */
+    private val clock: () -> Long,
     private val flushSoon: () -> Unit,
 ) {
     private val queue = ArrayBlockingQueue<BlockedTry>(capacity)

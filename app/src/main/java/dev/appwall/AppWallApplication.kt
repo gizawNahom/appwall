@@ -101,7 +101,7 @@ class AppWallApplication : Application() {
             onDbThread = { Thread.currentThread() === dbThread },
             changed = logChanged::notifyChanged,
         )
-        tries = TryQueue { db.schedule(::writeTries, 1, TimeUnit.SECONDS) }
+        tries = TryQueue(clock = System::currentTimeMillis) { db.schedule(::writeTries, 1, TimeUnit.SECONDS) }
         apps = InstalledAppsRepository(this, namedExecutor("appwall-apps"))
         firewallStatus = FirewallStatusBoard(ChangeSignal(MainThreadScheduler))
         firewall = FirewallCommands(

@@ -17,8 +17,19 @@ class TryQueueTest {
         queue.offer("a", packet(443))
         now = 2_000
         queue.offer(null, packet(80))
-        assertEquals(listOf(BlockedTry("a", packet(443), 1_000), BlockedTry(null, packet(80), 2_000)), queue.drain())
+        val (first, second) = queue.drain()
+        assertEquals(listOf("a", null), listOf(first.owner, second.owner))
+        assertEquals(listOf(packet(443), packet(80)), listOf(first.packet, second.packet))
+        assertEquals(listOf(1_000L, 2_000L), listOf(first.time, second.time))
         assertEquals(emptyList<BlockedTry>(), queue.drain())
+    }
+
+    @Test
+    fun byDefaultTheQueueHoldsCapacityTries() {
+        val queue = TryQueue(clock = { now }) {}
+        repeat(TryQueue.CAPACITY + 1) { queue.offer("a", packet(443)) }
+        assertEquals(1, queue.droppedTries)
+        assertEquals(TryQueue.CAPACITY, queue.drain().size)
     }
 
     @Test

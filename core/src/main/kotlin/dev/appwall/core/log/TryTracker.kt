@@ -32,48 +32,40 @@ class TryTracker(
         var counted = false
     }
 
-    private val connections = HashMap<String, Connection>()
+    // Typed as Kotlin maps, not HashMap, so reading them involves no Java platform types.
+    private val connections: MutableMap<String, Connection> = HashMap()
     /** "app|name" to when that lookup last counted as a try. */
-    private val lookups = HashMap<String, Long>()
+    private val lookups: MutableMap<String, Long> = HashMap()
     /** "address|port" to the one app seen connecting there and when; [AMBIGUOUS] if several. */
-    private val destinations = HashMap<String, Pair<String, Long>>()
+    private val destinations: MutableMap<String, Pair<String, Long>> = HashMap()
     private var lastSweep = 0L
 
     fun onPacket(packet: Packet, now: Long) {
-        val key = connectionKey(packet)
-        val connection = connections[key]
-        if (connection == null) {
-            val created = Connection(packet, now)
-            connections[key] = created
-            created.owner = ownerOf(packet)
-            if (created.owner != null) count(created, now)
-        } else {
-            connection.lastSeen = now
-            if (!connection.counted) {
-                connection.owner = ownerOf(packet)
-                if (connection.owner != null) count(connection, now)
-            }
+        val connection = connections.getOrPut(connectionKey(packet)) { Connection(packet, now) }
+        connection.lastSeen = now
+        if (!connection.counted) {
+            connection.owner = ownerOf(packet)
+            if (connection.owner != null) count(connection, now)
         }
         if (now - lastSweep >= SWEEP_MS) sweep(now)
     }
 
     /**
      * Settles connections that waited long enough for an owner, and forgets old state. Called
-     * from [onPacket]; call it regularly when no packets arrive, too.
+     * from [onPacket] at most every [SWEEP_MS]; call it regularly when no packets arrive, too.
      */
     fun sweep(now: Long) {
         lastSweep = now
-        val iterator = connections.values.iterator()
-        while (iterator.hasNext()) {
-            val connection = iterator.next()
+        // Forgotten first, so what's left is what settling may go by.
+        lookups.values.removeAll { !isRepeatLookup(it, now) }
+        destinations.values.removeAll { (_, time) -> !isLearned(time, now) }
+        for (connection in connections.values) {
             if (!connection.counted && now - connection.start >= PENDING_MS) {
-                connection.owner = learnedOwner(connection.first, now)
+                connection.owner = learnedOwner(connection.first)
                 count(connection, now)
             }
-            if (now - connection.lastSeen >= CONNECTION_IDLE_MS) iterator.remove()
         }
-        lookups.values.removeAll { now - it >= LOOKUP_WINDOW_MS }
-        destinations.values.removeAll { now - it.second >= LEARN_MS }
+        connections.values.removeAll { now - it.lastSeen >= CONNECTION_IDLE_MS }
     }
 
     private fun count(connection: Connection, now: Long) {
@@ -84,7 +76,7 @@ class TryTracker(
         if (name != null) {
             val key = "$owner|$name"
             val last = lookups[key]
-            if (last != null && now - last < LOOKUP_WINDOW_MS) return
+            if (last != null && isRepeatLookup(last, now)) return
             lookups[key] = now
         } else if (owner != null) {
             val key = destinationKey(packet)
@@ -94,12 +86,17 @@ class TryTracker(
         onTry(owner, packet)
     }
 
+    /** A lookup now repeats the one that counted at [last]: the same app and name, too soon after. */
+    private fun isRepeatLookup(last: Long, now: Long) = now - last < LOOKUP_WINDOW_MS
+
+    /** An app seen at a destination at [time] still says who connects there. */
+    private fun isLearned(time: Long, now: Long) = now - time < LEARN_MS
+
     /** The one blocked app recently seen connecting to the packet's destination, if just one. */
-    private fun learnedOwner(packet: Packet, now: Long): String? {
+    private fun learnedOwner(packet: Packet): String? {
         // A lookup's destination is AppWall's own DNS server, which says nothing about the app.
         if (packet.dnsQuery != null) return null
-        val (owner, time) = destinations[destinationKey(packet)] ?: return null
-        return owner.takeIf { it != AMBIGUOUS && now - time < LEARN_MS }
+        return destinations[destinationKey(packet)]?.first.takeIf { it != AMBIGUOUS }
     }
 
     private fun connectionKey(p: Packet) =
@@ -115,7 +112,8 @@ class TryTracker(
         const val LOOKUP_WINDOW_MS = 30_000L
         /** How long a destination remembers which app connected to it. */
         const val LEARN_MS = 10 * 60_000L
-        private const val SWEEP_MS = 1_000L
+        /** [TryTracker.onPacket] sweeps at most this often; settling an unidentified try can lag by this much. */
+        const val SWEEP_MS = 1_000L
         private const val AMBIGUOUS = ""
     }
 }

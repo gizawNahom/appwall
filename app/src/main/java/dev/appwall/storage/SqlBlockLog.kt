@@ -83,12 +83,7 @@ class SqlBlockLog(
         return db.query(
             if (packageName == null) DESTINATIONS_UNATTRIBUTED else DESTINATIONS_FOR_APP,
             listOfNotNull(packageName) + since(),
-        ) {
-            val isLookup = it.int(1) != 0
-            // A lookup's port is always DNS's, which says nothing about the app.
-            val ports = if (isLookup) emptyList() else it.string(2)!!.split(',').mapNotNull(String::toIntOrNull).filter { p -> p != 0 }.sorted()
-            Destination(it.string(0)!!, isLookup, ports, it.int(3), it.long(4))
-        }
+        ) { Destination.fromPortList(it.string(0)!!, isLookup = it.int(1) != 0, portList = it.string(2)!!, it.int(3), it.long(4)) }
     }
 
     /** One row per app, most recently active first. */

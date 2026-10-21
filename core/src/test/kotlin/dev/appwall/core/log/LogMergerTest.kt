@@ -14,14 +14,15 @@ class LogMergerTest {
 
     @Test
     fun aNewPlaceGetsARow() {
-        assertEquals(LogWrite.Insert, merger.plan("k", 0))
+        assertEquals(LogWrite.Insert, merger.plan("k", START))
     }
 
     @Test
     fun repeatsWithinAMinuteOfTheFirstTryBumpThatRow() {
-        merger.inserted("k", 7, 0)
-        assertEquals(LogWrite.Bump(7), merger.plan("k", 1))
-        assertEquals(LogWrite.Bump(7), merger.plan("k", WINDOW_MS - 1))
+        merger.inserted("k", 7, START)
+        assertEquals(7L, (merger.plan("k", START + 1) as LogWrite.Bump).rowId)
+        assertEquals(LogWrite.Bump(7), merger.plan("k", START + WINDOW_MS - 1))
+        assertEquals(LogWrite.Insert, merger.plan("k", START + WINDOW_MS))
     }
 
     @Test
@@ -29,7 +30,7 @@ class LogMergerTest {
         // A try every 30 s for five minutes: rows of one minute each, not one row stamped at the end.
         var rows = 0
         var nextId = 1L
-        for (t in 0..300_000L step 30_000) {
+        for (t in START..START + 300_000L step 30_000) {
             if (merger.plan("k", t) == LogWrite.Insert) {
                 merger.inserted("k", nextId++, t)
                 rows++
@@ -40,19 +41,24 @@ class LogMergerTest {
 
     @Test
     fun differentPlacesDontShareRows() {
-        merger.inserted("a", 1, 0)
-        assertEquals(LogWrite.Insert, merger.plan("b", 1))
+        merger.inserted("a", 1, START)
+        assertEquals(LogWrite.Insert, merger.plan("b", START + 1))
     }
 
     @Test
-    fun forgetAndClearCloseRows() {
-        merger.inserted("old", 1, 0)
-        merger.inserted("new", 2, WINDOW_MS)
-        merger.forget(WINDOW_MS)
-        assertEquals(LogWrite.Insert, merger.plan("old", WINDOW_MS)) // closed anyway by time
-        assertEquals(LogWrite.Bump(2), merger.plan("new", WINDOW_MS))
+    fun forgettingKeepsRowsStillOpen() {
+        merger.inserted("old", 1, START)
+        merger.inserted("new", 2, START + 1)
+        merger.forget(START + WINDOW_MS)
+        assertEquals(LogWrite.Insert, merger.plan("old", START + WINDOW_MS)) // closed anyway by time
+        assertEquals(LogWrite.Bump(2), merger.plan("new", START + WINDOW_MS))
+    }
+
+    @Test
+    fun clearClosesEveryRow() {
+        merger.inserted("k", 1, START)
         merger.clear()
-        assertEquals(LogWrite.Insert, merger.plan("new", WINDOW_MS))
+        assertEquals(LogWrite.Insert, merger.plan("k", START + 1))
     }
 
     @Test
@@ -63,5 +69,10 @@ class LogMergerTest {
         assertNotEquals(LogMerger.key("a", p(443)), LogMerger.key("b", p(443)))
         assertNotEquals(LogMerger.key("a", p(443)), LogMerger.key("a", p(80)))
         assertNotEquals(LogMerger.key("a", p(53, "x.example")), LogMerger.key("a", p(53, "y.example")))
+    }
+
+    private companion object {
+        /** Not zero, so a window measured from the wrong end shows. */
+        const val START = 1_700_000_000_000L
     }
 }

@@ -15,26 +15,31 @@ sealed interface LogWrite {
  */
 class LogMerger(private val windowMs: Long = WINDOW_MS) {
 
-    /** Rows still open for repeats, by [key]: row id and the row's first try time. */
-    private val open = HashMap<String, Pair<Long, Long>>()
+    private class Row(val id: Long, val firstTry: Long)
+
+    /** Rows that may still be open for repeats, by [key]. A Kotlin map: no Java platform types. */
+    private val rows: MutableMap<String, Row> = HashMap()
 
     fun plan(key: String, now: Long): LogWrite {
-        val (rowId, firstTry) = open[key] ?: return LogWrite.Insert
-        return if (now - firstTry < windowMs) LogWrite.Bump(rowId) else LogWrite.Insert
+        val row = rows[key]
+        return if (row != null && takesRepeats(row, now)) LogWrite.Bump(row.id) else LogWrite.Insert
     }
 
     /** A row was added for [key] at [now]. */
     fun inserted(key: String, rowId: Long, now: Long) {
-        open[key] = rowId to now
+        rows[key] = Row(rowId, now)
     }
 
     /** Forgets rows whose window has closed. */
     fun forget(now: Long) {
-        open.values.removeAll { now - it.second >= windowMs }
+        rows.values.removeAll { !takesRepeats(it, now) }
     }
 
     /** The log was cleared: no row is open any more. */
-    fun clear() = open.clear()
+    fun clear() = rows.clear()
+
+    /** A row's window: it takes repeat tries until [windowMs] after its first. */
+    private fun takesRepeats(row: Row, now: Long) = now - row.firstTry < windowMs
 
     companion object {
         const val WINDOW_MS = 60_000L

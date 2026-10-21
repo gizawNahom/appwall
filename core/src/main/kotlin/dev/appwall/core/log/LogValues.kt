@@ -27,4 +27,17 @@ data class Destination(
     val ports: List<Int>,
     val attempts: Int,
     val lastTime: Long,
-)
+) {
+    companion object {
+        /** A destination from the log's grouped query, whose [portList] is its ports joined by commas. */
+        fun fromPortList(name: String, isLookup: Boolean, portList: String, attempts: Int, lastTime: Long) =
+            Destination(name, isLookup, ports(isLookup, portList), attempts, lastTime)
+
+        /**
+         * A lookup's port is always DNS's, which says nothing about the app, and port 0 stands for
+         * a protocol without ports (ICMP): neither is shown. Anything not a number is skipped.
+         */
+        private fun ports(isLookup: Boolean, portList: String): List<Int> =
+            if (isLookup) emptyList() else portList.split(',').mapNotNull(String::toIntOrNull).filter { it != 0 }.sorted()
+    }
+}
