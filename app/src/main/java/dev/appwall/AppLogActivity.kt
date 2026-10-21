@@ -13,9 +13,13 @@ import android.widget.ImageView
 import android.widget.ListView
 import android.widget.TextView
 import dev.appwall.core.log.Destination
-import dev.appwall.core.log.LogEntry
 import dev.appwall.core.net.PacketParser
-import java.util.Calendar
+import dev.appwall.core.screens.AppLogState
+import dev.appwall.core.screens.AppLogToggle
+import dev.appwall.core.screens.DayLabel
+import dev.appwall.core.screens.TimelineRow
+import dev.appwall.core.screens.appLogState
+import java.time.ZoneId
 
 /**
  * One app's blocked traffic. Destinations answers "where", most tried first; Timeline answers
@@ -27,17 +31,26 @@ class AppLogActivity : Activity() {
     private val settings get() = appWall.settings
     /** Null for traffic AppWall couldn't attribute to an app. */
     private var packageName: String? = null
+    private var label = ""
     private var showTimeline = false
     private val destinations = DestinationsAdapter()
     private val timeline = TimelineAdapter()
 
-    /** Reloads whenever the log changes, while the screen is visible. */
+    /** Rebuilds the page's [AppLogState] whenever the log or the block rules change, while visible. */
     private val loader by lazy {
         logLoader({
             val pkg = packageName
             val withTimeline = showTimeline
-            fun(log: SqlBlockLog) = log.destinations(pkg) to (if (withTimeline) log.entriesFor(pkg) else null)
-        }) { (places, entries) -> show(places, entries) }
+            val policy = settings.policy
+            val days = settings.logSettings.retentionDays
+            val now = System.currentTimeMillis()
+            fun(log: SqlBlockLog) = appLogState(
+                pkg, policy, days,
+                destinations = log.destinations(pkg),
+                entries = if (withTimeline) log.entriesFor(pkg) else emptyList(),
+                showTimeline = withTimeline, now = now, zone = ZoneId.systemDefault(),
+            )
+        }, ::render)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,7 +60,7 @@ class AppLogActivity : Activity() {
         showTimeline = savedInstanceState?.getBoolean(STATE_TIMELINE) ?: false
 
         val pkg = packageName
-        val label = if (pkg == null) getString(R.string.unknown_app) else LogActivity.appLabel(this, pkg)
+        label = if (pkg == null) getString(R.string.unknown_app) else LogActivity.appLabel(this, pkg)
         findViewById<TextView>(R.id.app_log_name).text = label
         findViewById<ImageView>(R.id.app_log_icon).apply {
             if (pkg != null) setImageDrawable(AppIcons(this@AppLogActivity)[pkg]) else visibility = View.GONE
@@ -55,22 +68,17 @@ class AppLogActivity : Activity() {
         findViewById<View>(R.id.app_log_back).setOnClickListener { finish() }
         findViewById<View>(R.id.tab_destinations).setOnClickListener { selectTab(timeline = false) }
         findViewById<View>(R.id.tab_timeline).setOnClickListener { selectTab(timeline = true) }
-        findViewById<Button>(R.id.app_log_toggle).apply {
-            // Unattributed traffic has no app to allow.
-            visibility = if (pkg == null) View.GONE else View.VISIBLE
-            setOnClickListener {
-                if (pkg == null) return@setOnClickListener
-                appWall.firewall.setBlocked(listOf(pkg), !settings.policy.isBlocked(pkg))
-                updateState(label)
-            }
+        findViewById<Button>(R.id.app_log_toggle).visibility = View.INVISIBLE // until the first state arrives
+        findViewById<Button>(R.id.app_log_toggle).setOnClickListener {
+            // The page redraws when the policy change comes back through the loader.
+            if (pkg != null) appWall.firewall.setBlocked(listOf(pkg), !settings.policy.isBlocked(pkg))
         }
-        updateState(label)
         selectTab(showTimeline)
     }
 
     override fun onStart() {
         super.onStart()
-        loader.start(appWall.logChanged)
+        loader.start(appWall.logChanged, settings.policyChanged)
     }
 
     override fun onStop() {
@@ -83,18 +91,6 @@ class AppLogActivity : Activity() {
         outState.putBoolean(STATE_TIMELINE, showTimeline)
     }
 
-    /** The "● BLOCKED" / "ALLOWED" tag and the button that flips it. */
-    private fun updateState(label: String) {
-        val pkg = packageName
-        val blocked = pkg == null || settings.policy.isBlocked(pkg)
-        findViewById<TextView>(R.id.app_log_state).apply {
-            setText(if (blocked) R.string.state_blocked else R.string.state_allowed)
-            setCompoundDrawablesRelativeWithIntrinsicBounds(if (blocked) R.drawable.dot_blocked else 0, 0, 0, 0)
-        }
-        findViewById<Button>(R.id.app_log_toggle).text =
-            getString(if (blocked) R.string.app_log_allow else R.string.app_log_block, label)
-    }
-
     private fun selectTab(timeline: Boolean) {
         showTimeline = timeline
         findViewById<View>(R.id.tab_destinations).isSelected = !timeline
@@ -104,23 +100,30 @@ class AppLogActivity : Activity() {
         loader.reload()
     }
 
-    private fun show(places: List<Destination>, entries: List<LogEntry>?) {
-        val days = settings.logSettings.retentionDays
-        destinations.items = places
-        destinations.max = destinations.items.maxOfOrNull { it.attempts } ?: 1
-        if (entries != null) timeline.setEntries(entries)
-        (if (showTimeline) timeline else destinations).notifyDataSetChanged()
+    private fun render(state: AppLogState) {
+        // The "● BLOCKED" / "ALLOWED" tag and the button that flips it.
+        findViewById<TextView>(R.id.app_log_state).apply {
+            setText(if (state.blocked) R.string.state_blocked else R.string.state_allowed)
+            setCompoundDrawablesRelativeWithIntrinsicBounds(if (state.blocked) R.drawable.dot_blocked else 0, 0, 0, 0)
+        }
+        findViewById<Button>(R.id.app_log_toggle).apply {
+            visibility = if (state.toggle == AppLogToggle.NONE) View.GONE else View.VISIBLE
+            text = getString(if (state.toggle == AppLogToggle.ALLOW) R.string.app_log_allow else R.string.app_log_block, label)
+        }
 
+        destinations.state = state
+        timeline.rows = state.timeline
+        (if (state.showTimeline) timeline else destinations).notifyDataSetChanged()
         findViewById<TextView>(R.id.tab_destinations).text =
-            FontSpan.labelWithCount(this, getString(R.string.log_tab_destinations), destinations.items.size)
-        findViewById<TextView>(R.id.dest_column).text = resources.getQuantityString(R.plurals.dest_column, days, days)
-        val empty = if (showTimeline) timeline.isEmpty else destinations.isEmpty
-        findViewById<View>(R.id.app_log_empty).visibility = if (empty) View.VISIBLE else View.GONE
+            FontSpan.labelWithCount(this, getString(R.string.log_tab_destinations), state.destinations.size)
+        findViewById<TextView>(R.id.dest_column).text =
+            resources.getQuantityString(R.plurals.dest_column, state.retentionDays, state.retentionDays)
+        findViewById<View>(R.id.app_log_empty).visibility = if (state.empty) View.VISIBLE else View.GONE
     }
 
     private inner class DestinationsAdapter : BaseAdapter() {
-        var items: List<Destination> = emptyList()
-        var max = 1
+        var state: AppLogState? = null
+        private val items get() = state?.destinations.orEmpty()
 
         override fun getCount() = items.size
         override fun getItem(position: Int) = items[position]
@@ -137,59 +140,51 @@ class AppLogActivity : Activity() {
                 d.ports.isNotEmpty() -> getString(R.string.dest_ports, d.ports.joinToString(", "), ago)
                 else -> getString(R.string.dest_no_port, ago)
             }
-            view.findViewById<MeterView>(R.id.dest_meter).fraction = d.attempts.toFloat() / max
+            view.findViewById<MeterView>(R.id.dest_meter).fraction = d.attempts.toFloat() / (state?.meterMax ?: 1)
             view.findViewById<TextView>(R.id.dest_count).text = d.attempts.toString()
             return view
         }
     }
 
-    private class DayHeading(val label: String, val total: Int)
-
     /** Day headings and entries in one list, newest first. */
     private inner class TimelineAdapter : BaseAdapter() {
-        private var rows: List<Any> = emptyList() // DayHeading or LogEntry
-
-        fun setEntries(entries: List<LogEntry>) {
-            val today = startOfDay(System.currentTimeMillis())
-            rows = entries.groupBy { startOfDay(it.time) }.flatMap { (day, dayEntries) ->
-                listOf(DayHeading(dayLabel(day, today), dayEntries.sumOf { it.attempts })) + dayEntries
-            }
-        }
+        var rows: List<TimelineRow> = emptyList()
 
         override fun getCount() = rows.size
         override fun getItem(position: Int) = rows[position]
         override fun getItemId(position: Int) = position.toLong()
         override fun getViewTypeCount() = 2
-        override fun getItemViewType(position: Int) = if (rows[position] is LogEntry) 1 else 0
+        override fun getItemViewType(position: Int) = if (rows[position] is TimelineRow.Entry) 1 else 0
         override fun isEnabled(position: Int) = false
 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
             val row = rows[position]
-            if (row is LogEntry) {
+            if (row is TimelineRow.Entry) {
+                val entry = row.entry
                 val view = convertView ?: layoutInflater.inflate(R.layout.item_log, parent, false)
-                view.findViewById<TextView>(R.id.log_time).text = TimeText.clock(this@AppLogActivity, row.time)
-                view.findViewById<TextView>(R.id.log_target).text = row.host ?: row.address
+                view.findViewById<TextView>(R.id.log_time).text = TimeText.clock(this@AppLogActivity, entry.time)
+                view.findViewById<TextView>(R.id.log_target).text = entry.host ?: entry.address
                 view.findViewById<TextView>(R.id.log_port).text = when {
-                    row.host != null -> getString(R.string.log_port_dns)
-                    row.port != 0 -> row.port.toString()
-                    else -> PacketParser.protocolName(row.protocol)
+                    entry.host != null -> getString(R.string.log_port_dns)
+                    entry.port != 0 -> entry.port.toString()
+                    else -> PacketParser.protocolName(entry.protocol)
                 }
-                view.findViewById<TextView>(R.id.log_attempts).text = getString(R.string.log_attempts, row.attempts)
+                view.findViewById<TextView>(R.id.log_attempts).text = getString(R.string.log_attempts, entry.attempts)
                 return view
             }
-            val heading = row as DayHeading
+            val day = row as TimelineRow.Day
             val view = convertView ?: layoutInflater.inflate(R.layout.item_log_day, parent, false)
-            view.findViewById<TextView>(R.id.day_label).text = heading.label
+            view.findViewById<TextView>(R.id.day_label).text = dayLabel(day.label)
             view.findViewById<TextView>(R.id.day_total).text =
-                resources.getQuantityString(R.plurals.log_day_total, heading.total, heading.total)
+                resources.getQuantityString(R.plurals.log_day_total, day.attempts, day.attempts)
             return view
         }
 
-        private fun dayLabel(day: Long, today: Long): String = when (day) {
-            today -> getString(R.string.log_today)
-            startOfDay(today - 1) -> getString(R.string.log_yesterday)
-            else -> DateUtils.formatDateTime(
-                this@AppLogActivity, day,
+        private fun dayLabel(label: DayLabel): String = when (label) {
+            DayLabel.Today -> getString(R.string.log_today)
+            DayLabel.Yesterday -> getString(R.string.log_yesterday)
+            is DayLabel.Date -> DateUtils.formatDateTime(
+                this@AppLogActivity, label.startOfDay,
                 DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_NO_YEAR or DateUtils.FORMAT_ABBREV_MONTH,
             ).uppercase()
         }
@@ -202,13 +197,5 @@ class AppLogActivity : Activity() {
         /** Opens the log of [packageName], or of unattributed traffic when null. */
         fun intent(context: Context, packageName: String?): Intent =
             Intent(context, AppLogActivity::class.java).putExtra(EXTRA_PACKAGE, packageName)
-
-        private fun startOfDay(time: Long): Long = Calendar.getInstance().apply {
-            timeInMillis = time
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
     }
 }
