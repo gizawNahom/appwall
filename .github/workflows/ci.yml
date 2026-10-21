@@ -30,10 +30,10 @@ jobs:
           echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" > /dev/null
 
-      - name: Test, with coverage (core must keep 95% of lines)
+      - name: Test, with coverage (core must stay at 100%)
         run: ./gradlew test :core:jacocoTestCoverageVerification :core:jacocoTestReport :app:createDebugUnitTestCoverageReport
 
-      - name: Mutation-test the core (fails below the threshold in core/build.gradle.kts)
+      - name: Mutation-test the core (fails if any mutant survives)
         run: ./gradlew :core:pitest
 
       - name: Build

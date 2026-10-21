@@ -82,8 +82,8 @@ Run the tests with:
 
 CI also checks how good the tests are, and fails if either number drops:
 
-- **Coverage** with JaCoCo: `./gradlew :core:jacocoTestReport` (the core must keep 95% of its lines covered). The `:app` shell is mostly Android glue that only runs on a phone, so its JVM coverage is low ([![App coverage](https://raw.githubusercontent.com/gizawNahom/appwall/badges/app-coverage.svg)](https://github.com/gizawNahom/appwall/actions/workflows/ci.yml)); the logic is in `:core`.
-- **Mutation testing** of `:core` with PIT: `./gradlew :core:pitest` makes small changes to the code and checks that the tests catch them. Report in `core/build/reports/pitest/`.
+- **Coverage** with JaCoCo: `./gradlew :core:jacocoTestReport` (every line and branch of the core is covered, and the build fails otherwise). The `:app` shell is mostly Android glue that only runs on a phone, so its JVM coverage is low ([![App coverage](https://raw.githubusercontent.com/gizawNahom/appwall/badges/app-coverage.svg)](https://github.com/gizawNahom/appwall/actions/workflows/ci.yml)); the logic is in `:core`.
+- **Mutation testing** of `:core` with PIT: `./gradlew :core:pitest` makes small changes to the code and checks that the tests catch them; every one must be caught. Report in `core/build/reports/pitest/`.
 
 Ground rules for changes:
 

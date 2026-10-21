@@ -2,7 +2,7 @@
 
 ## Development Paradigm
 
-This project follows the **functional programming** paradigm: a functional core with an imperative shell. Decisions and calculations are pure functions over immutable data in the `:core` module (no Android); Android and IO code stays in a thin shell in `:app`. Use @nw-functional-software-crafter for implementation.
+This project follows the **functional programming** paradigm: a functional core with an imperative shell. Decisions and calculations are pure functions over immutable data in the `:core` module (no Android); Android and IO code stays in a thin shell in `:app`.
 
 ## Ground rules
 
