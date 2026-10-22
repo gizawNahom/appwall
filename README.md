@@ -48,7 +48,21 @@ For the log, AppWall reads (but never forwards) what blocked apps send into the 
 
 Requires Android 8.0 or newer.
 
-Ready-to-install APKs will be published on the [Releases](https://github.com/gizawNahom/appwall/releases) page soon. Until then, build it from source.
+Download the APK from the [latest release](https://github.com/gizawNahom/appwall/releases/latest), open it on your phone and allow installing from that source when Android asks.
+
+To check the download, compare its SHA-256 with the `.sha256` file next to it on the release:
+
+```bash
+sha256sum -c AppWall-v0.1.0.apk.sha256
+```
+
+Every release is signed with the same key. Its certificate's SHA-256 fingerprint is:
+
+```
+8a81372c2da18c7bde3290d27754f6296dceb339fdd7355dbffe51c7d88dac76
+```
+
+You can check it with `apksigner verify --print-certs AppWall-v0.1.0.apk` from the Android SDK's build-tools.
 
 ### Build from source
 
