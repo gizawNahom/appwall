@@ -4,7 +4,7 @@
 ![Core coverage](https://raw.githubusercontent.com/gizawNahom/appwall/badges/core-coverage.svg)
 ![Core mutation score](https://raw.githubusercontent.com/gizawNahom/appwall/badges/core-mutation.svg)
 
-A simple, open-source firewall for Android that cuts off internet access for the apps you choose. No root needed, no server, no tracking.
+An open-source firewall for Android that cuts off internet access for the apps you choose. No root needed, no server, no tracking.
 
 <p>
   <img src="screenshots/home.png" height="420" alt="Home screen: the firewall is on, with blocked and allowed apps">
